@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Rethink logging</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name=viewport content="width=device-width, initial-scale=1">
+        <meta name=”description” content=”isaiah perumalla tech blog, Alogrithms, Java, Python, Linux”>
+        <link href="../theme/css/theme.css" rel="stylesheet">
+        <link href="../theme/css/pygments.css" rel="stylesheet">
+        <link href="../theme/css/custom.css" rel="stylesheet">
+        <link href="../theme/css/sanitize.css" rel="stylesheet">
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-109572315-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-109572315-1');
+</script>
+
+</head>
+
+<body id="index" class="home">
+<header id="page-header">
+<div id="site-title" class="col span_6">
+    <div id="name-title">
+        <h1 id="site-name"> Isaiah Perumalla</h1>
+        <h3 id="job-title"> Software Engineer </h3>
+    </div>
+    </div>
+        <nav id="social">
+            <ul>
+            <li><a href="/pages/about.html">About</a></li>
+            <li><a href="/archives.html">Archives</a></li>
+            
+            
+        </ul>
+        </nav><!-- /#menu -->
+
+    </header> 
+    <h1>Rethink logging</h1>
+    
+
+    <p>Logging can be a very effective way of gathering data a system. In my experience most of application logging is litter programs with text in an ad hoc fashion, which greatly diminishes the value of logging. Most systems tend to start off with very little logging or no logging, as the system grows and problems arise developers add additional logging. However this is done in a non-systematic way, it often not clear what information should be logged, developers often log debug/trace level diagnostic information in development but turned off in production, which leads to megabytes/gigabytes of similar looking text which may be missing crucial information, which makes it very difficult to extract meaningful information to troubleshoot a problem.  </p>
+<h2>Logging is a feature</h2>
+<p><em>"Logging is the process of recording application actions and state to a secondary interface."</em>     <cite> Colin Eberhart </cite>
+The consumer who sees this interface, the support guy looking at the application log, does not have access to the application's primary interface. This means that what is detailed in this log should be driven by needs of the consumer of this interface; it is often the main source of information when diagnosing a problem. It can be either to diagnose bugs or gather stats or verify the correctness of a running application. 
+<img alt="write logs for machines to read" src="/imgs/LOGS-FOR-MACHINES.svg"></p>
+<h2>Primary consumer of logs are programs</h2>
+<p>The current defacto logging API are centered around formatted strings, in doing so we are conflating the information and the representation. Text based logging using formatted strings are popular, main reason for this the assumption that humans are the first level consumers of the logs, however when analysing logs we usually interested in a subset of information, generally tools like grep are used to extract information of interested, however this approach doesnt scale for larger applications.
+ This may be a more contentious point, but I belived logs should be optimized for machine readability first. What I mean by this  is what is recorded in the logs should be sematically rich messages, which is later read by simple tools to extract information which can then be consumed by humans.</p>
+<h3>Seperate information from representation</h3>
+<p>[string base logging img]
+ The other main disadvantage of unstructured text based logging and string format based logging API is the calling code is doing two things at once, recording the infomation but also now burdend with knowing how to represent the information. </p>
+<div class="highlight"><pre><span></span>if (logger.isInfoEnabled()) {
+    logger.info(&quot;received price for symbol {} for date: {} with value {}&quot;, price.symbol(), price.getDate(), price.value())
+
+   }
+</pre></div>
+
+
+<p>The logging shown above is very common, but has conflated two concerns, recording information, but the calling code has to know how to representing the information, mixing these two concerns severely affects the flexibility and using string has a serious impact on performance.
+ Logging usually used to record the following application/domain events, Errors and Metrics, </p>
+<p>Formatted Strings are extremely inefficient to represent domain events, they should be represent as structured data with types.</p>
+<h4>Errors</h4>
+<p>Unexpected errors are logged using a similar API, the stack trace provided by the exception is converted to strings, and recorded, often the same exception occurs repeatedly and is logged over and over again. 
+While reading through some of the Aeron source code, I noticed an interesting approach to recording expections. The approach taken there is to log distinct errors only with a count of the number of time the errors has occured, in addition the time of first and last observation is also recorded. This means that when the same error is experienced many times only the count and latest observation timestamp is updated, this approach is not only very efficient but also very much easier to read without loss of any information. I</p>
+<h4>Instrumetation and Metrics</h4>
+<p>Logs are often used to gather metrics and instrument internal state of a system. for example often its useful to see </p>
+<p>When logs are optimized for consumption by other programs, it has the benefit of many interesting side effects.</p>
+<p><img alt="automatic verification" src="/imgs/duke-checking.gif"></p>
+<h3>Automatic runtime and offline verification</h3>
+<p>All the data you’ve gathered via logging is useless if nobody reacts to it, one important consequence of writing logs for machines to read is it makes to possible to write programs to do <em>Runtime Verification</em> . 
+Runtime verificaiton is using data from observed events from a running system to verify key invariants of a system are not violated. Having sematically rich data recorded by a running systems means we can write monitoring programs which run as seperate process, that can verify system specification either offline or online while the system is running, this can be in production without any additional overhead on the running system.
+<em> pre/post condtions
+</em> assertion of temporal logic , monitor program can also verify properties dependent on time, where time constraints can be put on states (one can only be in a state for a certain time period)
+Although there is additional work for the developer to writing verification programs, the cost of writing the tool is minimal in comparision to letting bugs creep into production software, i have used this technique recently to improve the quality of a trading system which had very little automated tests. 
+Machine readable logs with semantically rich domain events enable <em>Runtime verification (RV)</em> in my opinion is a very lightweight method aimed at verifying that a specific execution of a system satisfies or violates a given critical property. Dur-
+ing development, runtime monitoring can be used as a debugging monitor or test oracle
+for system simulation, prototyping, or tests [9]. This type of monitoring ensures testers
+are notified of all specification violations, even if they are not easily noticable by testers
+(such as short transient violations). In deployed systems, monitors can be used as a fault
+detector to trigger recovery mechanisms such as safety shutdowns      </p>
+<p>verify temproal events </p>
+<h3>Replay debugging</h3>
+<h3>What should be logged</h3>
+<p>It depends on the application, one useful way to decide what to log is to think from the consumers perspective. </p>
+<h4>stats and metrics</h4>
+<p>it should be a first class citizen in your domain model, this will avoid logging unhandled expections and carrying on with execution.
+It is important to think about the consumer of the log messsage. Logging usually can be split up in to the following categories
+<em> support logging
+</em> event logs Trace recording
+* Metrics and instrumentation</p>
+<h2>logs should be structure</h2>
+<p>logs are stream of structured data </p>
+<h3>Errors</h3>
+<h3>Counters</h3>
+<h3>efficient and minimal overhead</h3>
+
+
+        
+</body>
+</html>

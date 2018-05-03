@@ -1,0 +1,269 @@
+body {
+  background-color: #bbbbbb1f;
+  font-family: Terminus, "Inconsolata", Monaco, "Dejavu Sans Mono", "Lucida Typewriter", Monospace;  
+  font-size: 14pt;
+  color: #000;  
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  margin: 1vw;
+}
+
+.container {
+  padding: 0 20px;
+}
+
+h1 {
+
+  padding: 0;
+  color: rgb(0,100,255);
+}
+
+h2 {
+  padding: 0;
+  color: rgb(0,100,255);
+}
+
+h3 {
+  padding: 0;
+  color: rgb(0,100,255);
+}
+
+h4 {
+  color: rgb(0,100,255);
+}
+
+/* for unvisited links: blue */
+a:link
+{
+  color: rgb(0,100,255);
+  text-decoration: none;
+}
+
+/* for visited links: purple */
+a:visited
+{
+  color: rgb(81,24,142);
+  text-decoration: none;
+}
+
+/* when mouse is over link or the link is active */
+a:hover, a:active
+{
+  text-decoration: underline;
+}
+
+ul,
+ol {
+  margin-left: 2em;
+}
+
+/*
+ * Use a border around tables, but don't draw lines around individual
+ * cells.
+ */
+table 
+{
+  border-style: solid;
+  border-collapse: collapse; 
+  border-width: thin;
+  font-size: 100%;
+}
+
+th, td 
+{
+  border-style: solid;
+  border-width: thin;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+.entry-title {
+  font-size: 100%;
+  margin-bottom: 0;
+}
+
+img-circle {
+    vertical-align: middle;
+    border-radius: 50%;
+}
+
+#site-name {
+  color: white;
+  font-size: 20pt;
+  font-style: bold;
+  text-align: center;
+  margin-bottom: 0;
+}
+
+#job-title {
+  color: white;
+  font-style: italic;
+  font-size: 12pt;
+  text-align: center;
+  margin: 0;
+}
+
+#page-header  {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    background: #3c3838;
+}
+
+
+
+header #social a:link {
+  color: white;
+}
+
+header #social a:visited {
+  color: white;
+}
+
+
+header #social ul {
+  font-size: 0;
+  margin: 0;
+}
+header #social li {
+  display: inline-block;
+  font-size: 12pt;
+  padding: 0 10px;
+}
+header #social li:first-child {
+  padding-left: 0;
+}
+header #social li + li {
+  border-left: 1px solid #ccc;
+}
+header #social li:last-child {
+  padding-right: 0;
+}
+
+@media (min-device-width: 42em) {
+  body {
+    margin: auto;
+    font-size: -webkit-xxx-large;
+  }
+}
+
+nav ul.pagination {
+  font-size: 0;
+  text-align: center;
+  margin: 0;
+}
+
+nav ul.pagination li {
+  display: inline-block;
+  font-size: 14pt;
+}
+
+nav ul.pagination li.active {
+  border: 2px solid #29abe2;
+}
+
+nav ul.pagination li:hover {
+  border-color: #29abe2;
+}
+
+nav.pagination-single {
+  padding: 20px 0 20px 0;
+  overflow: hidden;
+}
+
+nav.pagination-single span.previous {
+  float: left;
+  padding: 10px 0 10px 0;
+}
+
+nav.pagination-single span.next {
+  float: right;
+  padding: 10px 0 10px 0;
+}
+
+nav.pagination-single a {
+  color: #29abe2;
+}
+
+#single aside {
+  margin-top: 80px;
+}
+
+footer {
+  margin: 2ex 0;
+}
+
+footer img {
+  border-radius: 48px;
+  -webkit-border-radius: 48px;
+  -moz-border-radius: 48px;
+  margin-bottom: 10px;
+}
+
+article {
+  max-width: 50em;
+  
+}
+
+article p {
+  margin: 1ex 0;
+}
+
+article code {
+  font-family: "Terminus", "Inconsolata", "Monaco", "Lucida Typewriter", monospace;
+  overflow-x: auto;  
+}
+
+article pre {
+  border: 1px solid #ddd;
+  box-shadow: 5px 5px 5px #eee;
+  padding: 1em;
+  overflow-x: auto;
+}
+
+article pre code {
+  font-family: "Terminus", "Inconsolata", "Monaco", "Lucida Typewriter", monospace;
+}
+
+article blockquote {
+  margin: 25px 0;
+  padding-left: 20px;
+}
+
+article img {
+  display: block;
+  margin: 0;
+  border: 0.2ex #222 solid;
+}
+
+article #share-this {
+  margin: 40px 0 40px 0;
+}
+/*
+.article-header {
+/*  border-left: 4px solid #29abe2; */
+/*  margin: 10px 0 25px -4px;
+  padding: 5px 0 5px 10px; 
+}
+*/
+.light-gray {
+  color: #999;
+}
+.summary {
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px dashed white;
+}
+.meta {
+  font-size: 12pt;
+}
+
+hr
+{
+  border-style: dashed;
+  color: #000;
+
+}
