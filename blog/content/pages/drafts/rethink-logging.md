@@ -2,20 +2,35 @@ Title: Rethink logging
 Date: 2018-04-29 10:20
 Category: Logging monitoring
 
-Logging can be an effective way of gathering data from a system and observing its runtime behaviour. In my experience most of application logging is ad-hoc text in an ad h, which greatly diminishes the value of logging. Most systems tend to start off with very little logging or no logging, as the system grows and problems arise developers add additional logging, which leads to megabytes/gigabytes of similar looking text, what make things worse it often not clear what information should be logged, developers often log debug/trace level diagnostic information in development but turned off in production,  which makes it very difficult to extract meaningful information to troubleshoot a problem as it may be missing crucial information.  
+Logging can be an effective way of gathering data from a system and observing its runtime behaviour. In my experience most of application logging is ad-hoc text, which greatly diminishes the potential value of logging. Most systems tend to start off with very little logging or no logging, as the system grows and problems arise developers add additional logging, which leads to megabytes/gigabytes of similar looking text, what make things worse it often not clear what information should be logged, developers often log debug/trace level diagnostic information in development but turned off in production,  which makes it very difficult to extract meaningful information to troubleshoot a problem in production, as it may be missing crucial information.  
   
 ## Logging is a feature 
-There is often emphasis on designing a system for maintanability and testability, I argue that designing a system for observability is even more important as we shall see observable systems are easier to test and often can help diagonase even them most criplling problems.
-*"Logging is the process of recording application actions and state to a secondary interface."*  	<cite> Colin Eberhart </cite>
+There is often emphasis on designing a system for maintanability and testability, I argue that designing a system for observability is even more important as we shall see observable systems are easier to test, debug and often can help diagonase even them most criplling problems. Observable software is software which allows you to answer question about itself by simply observing *facts and events* emitted by the software, however this only happens by *purposefully building this feature* in the software itself. 
+
+"Engineers must be empowered to take the extra time to build for debuggability — we must be secure in the knowledge that
+this pays later dividends!" 
+&mdash; <cite>[Bryan Cantrill][1]</cite>
+[1]:https://files.gotocon.com/uploads/slides/conference_3/86/original/goto-ord-170502172018.pdf
+
+Another property of *Observable/debuggable software* is we should be able to understand the software by observing the fact and events reported by it, understanding by observation can only happend *if* the facts and events have to have semantically rich information with attached context. 
+It can be used as a way to better understand system performance and behavior, even during the what can be perceived as “normal” operation of a system.
+Events, tracing, exception tracking are all a derivative of logs, and if one has been using any of these tools, one already has some form of “Observability”
+Programmer usually do this by 
+
+ if (tracing_enabled)
+  printf(“we got here!\n”); 
+
 ### what is observability ? 
 
-
+*"Logging is the process of recording application actions and state to a secondary interface."*  	<cite> Colin Eberhart </cite>
 The consumer who sees this interface, the support guy looking at the application log, does not have access to the application's primary interface. This means that what is detailed in this log should be driven by needs of the consumer of this interface; it is often the main source of information when diagnosing a problem. It can be either to diagnose bugs or gather stats or verify the correctness of a running application. 
 ![write logs for machines to read](/imgs/LOGS-FOR-MACHINES.svg)
 
 ## Primary consumer of logs are programs
 
  The current defacto logging API are centered around formatted strings, in doing so we are conflating the information and the representation. Text based logging using formatted strings are popular, main reason for this the assumption that humans are the first level consumers of the logs, however when analysing logs we usually interested in a subset of information, generally tools like grep are used to extract information of interested, however this approach doesnt scale for larger applications.
+ logs should not necessarily have to be closely tied to an outage or a user complaint. It can be used as a way to better understand system performance and behavior. events and facts in a log can lead a developer to the answers, but it can’t make them necessarily find it, they need to be searchable
+  critical components of the system proactively but the vast majority of these metrics are never looked at.
  This may be a more contentious point, but I belived logs should be optimized for machine readability first. What I mean by this  is what is recorded in the logs should be sematically rich messages, which is later read by simple tools to extract information which can then be consumed by humans.
  
 ### Seperate information from representation 
