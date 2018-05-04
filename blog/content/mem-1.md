@@ -1,0 +1,36 @@
+Title: Memory management-1 (Reference counting)
+Date: 2017-07-25 10:20
+Category: GC
+
+Regardless if your are on a managed or unmanaged platform, having a broad understanding of basic memory management algorithms can pay off when working on performance critical applications.
+In this series of posts I will provide an overview of most fundamental garbage collection algorithms, as most garbage collection strategies are based on either one or a combination of these fundamental algorithms, to compare various algorithms, we need to look at the effect of each algorithm on throughput, latency (pause time) and space usage. We get started by looking at reference counting.
+
+## Reference Counting
+
+In any memory management algorithm we need to know if an object is considered live or garbage, reference counting maintains a simple invariant, any object is considered live if the number of references to that object is greater than zero. A reference to an object is created when a pointer to the object is copied from one location to another via an assigment. Each time a reference to an object is created, the objects reference count is incremented, similarly when an existing reference to an object is deleted, the reference count is decremented.
+
+### Advantages
+* This algorithm is simple and has the benefit of being able to be implemented as part of a library (eg C++ boost shared_ptr) a developer can use rather than being part of an underlying managed-runtime. 
+* It provides flexibility to use reference counting to only parts of the application and use manual or other forms of automatic memory management to other parts. 
+* On single core machines an advantage of reference counting is object memory is **potentially** freed as soon as the object is deemed garbage, this makes the algorithm deterministic and incremental in nature.
+* Can work with little head room when compared to tracing garbage collectors 
+
+### Disadvantages
+* There are several disadvantages, every-time a variable is changed from one pointer to another two 'reference counts' need to be update, one objects reference count is incremented while the other is decremented and then an additional check to see if the count of the decremented object has reached zero, from an applications point of view even a simple read operation would entail a store operation to memory. 
+* More over in a performance sensitive, memory access matters, since even reads to pointers will pollute the CPU caches by inducing extra store operations as the reference counts need to be updated.  This issue is amplified on multi-core machines as increments and decrements need to synchronized by using expensive atomic instructions, which can cause lot of contention on cache lines. 
+* Reference counting is often used becasue of its seemingly deterministic and incremental nature, as it distributes the cost of memory management throughout the program, however there are cases where reference counting can still pause mutator threads (potentially much longer than a optimized garbage collector), for example if there is a large pointer rich, tree like structure, when the referece to the root is  decremented then all references of the child objects reachable from the root must be recursively decremented and potentailly run any clean up task associated. The cost of this propotional to the size of the tree.
+* The biggest disadvantage is that the basic scheme described above will not handle cyclic pointers, cyclic data structures are not uncommon in many application. However with some explicit thought and design by theen developer, references to cyclic structures can be handled by  defining explicitly ownership of objects (see share_pointer, weak_pointer in C++ as example). Python uses a combination of reference counting and a partial tracing collector.
+* To be used as a general purpose memory management algorithm for concurrent applications it is not enough to just ensure the integrity of reference counts alone with atomic instructions, both the reference count and the pointer load and store must happen atomically to prevent race conditions or premature reclamation. shared_ptr in C++ ensures only reference count manipulation are updated atomically, in this case the developer must take care to ensure no race conditons on pointer updates. (C++ does have atomic version of shared_ptr, atomic_shared_ptr, however the implementaion may rely on a mutex or lock-free implementations require DWCAS (Double Word Compare And Swap) support from the hardware)
+
+### Final thoughts
+In my opinion reference counting is not the best choice for a general purpose memory manager when there small reference rich structures with high rates of pointer reads or writes as reference counting incurs a write even when a pointer is read. However given it can be implemented as a part of a library and independent of the runtime of the language, it be an attractive option when restricting it to managing a smaller set of resources.
+##### Netty ByteBuffer 
+A good example of how reference counting to manage a subset of resources is [Netty](http://netty.io/).
+[Java's NIO Apis]() use ByteBuffers when performing I/O operations, during an IO operation the data needs to be passed to the OS kernel, however byte buffers allocated on the JVM heap cannot be direclty used by the kernel (the garbage collector could move the buffer) so  under the covers, the JVM heap ByteBuffers are copied to temporary 'native' memory buffers on each I/O call.
+Java also has DirectByteBuffer which is a wrapper around native memory (memory that is not managed by JVM), when DirectByteBuffers are used the buffer can be passed directly to the kernel avoiding a copy. However allocating and deallocating a DirectByteBuffer is much more expensive than an ordinary JVM byte buffer, to avoid this cost the Netty framework pre allocates and manages a pool of direct Byte buffer, reference counting is used here to manage the life cycle of these pooled buffers. Reference counting is ideal in this case because
+
+* ByteBuffer cannot hold any reference to other pointers so cycles 
+* Reading writing bytes does not incur any pointer reads or writes so no overhead in updating ref counts
+
+
+

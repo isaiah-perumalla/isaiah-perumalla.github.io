@@ -1,0 +1,174 @@
+##pagewalk observations
+
+##track page faults for process 
+faults should equal number of pages allocated in virtual memory
+sudo $BCC_TOOLS/funccount t:exceptions:page_fault_user -p $(pidof pagewalk) 
+Tracing 1 functions for "t:exceptions:page_fault_user"... Hit Ctrl-C to end.
+^C
+FUNC                                    COUNT
+exceptions:page_fault_user             262145
+Detaching...
+
+
+##similar result using hugepages 2048kb
+sudo $BCC_TOOLS/funccount t:exceptions:page_fault_user -p $(pidof pagewalk)
+  
+sudo $BCC_TOOLS/trace t:exceptions:page_fault_user -p $(pidof pagewalk)
+sudo ./profile -F 999 -f -p $(pidof pagewalk)
+#test-1
+#check context switch rate and tlb misses
+taskset 2 perf record -F 99 -e context-switches -e dtlb_load_misses.miss_causes_a_walk  -C 1 -T  ./pingpong
+
+##enable hugepages 
+echo 1 > /proc/sys/vm/nr_hugepages 
+
+#test-2
+#check cpu time spent in kernel and cpu, expect kernel cput to be higher due to context switch cost
+taskset 2 perf record -e cycles:u -e cycles:k  -C 1 -T  ./pingpong 
+noticed kernel was heavily invloved in userspace function 
+
+#test-3 
+#check page faults occured 
+taskset 2 perf record -e faults  -C 1 -T  ./pingpong 
+
+report showed below what does that mean ?
+Samples: 8  of event 'faults'
+# Event count (approx.): 429
+#
+# Overhead  Command   Shared Object      Symbol                            
+# ........  ........  .................  ..................................
+#
+    78.79%  pingpong  libc-2.25.so       [.] malloc_hook_ini
+    15.62%  pingpong  ld-2.25.so         [.] _dl_map_object_from_fd
+     3.96%  pingpong  ld-2.25.so         [.] _dl_start
+     0.70%  pingpong  ld-2.25.so         [.] _start
+     0.47%  pingpong  [kernel.kallsyms]  [k] __clear_user
+     0.23%  perf      libc-2.25.so       [.] __strchr_sse2
+     0.23%  pingpong  [kernel.kallsyms]  [k] copy_user_enhanced_fast_string
+
+###error when tracing events
+Error:	No permissions to read /sys/kernel/debug/tracing/events/raw_syscalls/sys_(enter|exit)
+Hint:	Try 'sudo mount -o remount,mode=755 /sys/kernel/debug/tracing'
+
+#test-4
+# trace switch_mm -> flush all tlb entries related to userspace portion
+#sudo taskset 2   perf sched record -C 1 -- ./pingpong
+
+
+##tip 
+perf probe -F ### list all  probes in kernel
+##tlb counters
+perf record -e probe:tlb_flush_mmu_tlbonly -e probe:tlb_flush_mmu  -C 1  sleep 1
+
+##test-5
+sudo perf stat -e dtlb_load_misses.miss_causes_a_walk  -e cs -C 1 taskset 2 ./pingpong
+##
+ Performance counter stats for 'CPU(s) 1':
+
+            71,378      dtlb_load_misses.miss_causes_a_walk                                   
+             2,353      cs                                                          
+
+      19.525676140 seconds time elapsed
+
+sudo perf stat -e dtlb_load_misses.miss_causes_a_walk  -e cs -C 1 taskset 2 ./pingpong --thread
+##
+
+
+#####side not when ping pong was blocked on 'getchar' accidentally left in code
+pstack <pid> 
+showed stack
+
+sudo gstack 6310
+Thread 2 (Thread 0x7fe97bb37700 (LWP 6311)):
+#0  0x00007fe97bc5749c in __lll_lock_wait_private () from /lib64/libc.so.6
+#1  0x00007fe97bbb31b4 in getchar () from /lib64/libc.so.6
+#2  0x0000000000400a15 in pinger (args=0x7fff33cd8a90) at pingpong.c:34
+#3  0x00007fe97bf1036d in start_thread () from /lib64/libpthread.so.0
+#4  0x00007fe97bc48b9f in clone () from /lib64/libc.so.6
+Thread 1 (Thread 0x7fe97c53cb40 (LWP 6310)):
+#0  0x00007fe97bc381ad in read () from /lib64/libc.so.6
+#1  0x00007fe97bbb81b8 in __GI__IO_file_underflow () from /lib64/libc.so.6
+#2  0x00007fe97bbb9462 in __GI__IO_default_uflow () from /lib64/libc.so.6
+#3  0x00007fe97bbb323d in getchar () from /lib64/libc.so.6
+#4  0x0000000000400abc in ponger (args=0x7fff33cd8a90) at pingpong.c:56
+#5  0x0000000000400d66 in main (argc=2, argv=0x7fff33cd8ba8) at pingpong.c:133
+
+
+##ran ebpf funccount 'switch_mm_irqs_off'  -p <pid>
+## number of function call was consistent in both thread based and interprocess. (note inter pocess was half the count but only one side ping pong process was taken into account)
+
+
+##clearest indication of tlb flushes for interprocess exchange vs inter-thread exchange
+
+[isaiahp@localhost code]$ sudo  perf stat -e tlb:tlb_flush -C 1 taskset 2 ./pingpong --thread
+ping pong interprocess pid= 3120 
+
+ping pong with threads 
+ponger finished , pong_val=999, ping_val=999
+
+ Performance counter stats for 'CPU(s) 1':
+
+                98      tlb:tlb_flush                                               
+
+      21.361406567 seconds time elapsed
+
+[isaiahp@localhost code]$ sudo  perf stat -e tlb:tlb_flush -C 1 taskset 2 ./pingpong 
+ping pong interprocess pid= 3132 
+
+ponger finished , pong_val=999, ping_val=999
+pinger finished , pong_val=999, ping_val=999
+
+ Performance counter stats for 'CPU(s) 1':
+
+             2,052      tlb:tlb_flush                                               
+
+      29.008899977 seconds time elapsed
+
+
+###using ebpf its even more evident
+
+isaiahp@localhost code]$ sudo $BCC_TOOLS/funccount t:tlb:tlb_flush 
+Tracing 1 functions for "t:tlb:tlb_flush"... Hit Ctrl-C to end.
+^C
+FUNC                                    COUNT
+tlb:tlb_flush                            1633
+Detaching...
+[isaiahp@localhost code]$ sudo $BCC_TOOLS/funccount t:tlb:tlb_flush -p 6132
+Tracing 1 functions for "t:tlb:tlb_flush"... Hit Ctrl-C to end.
+^C
+FUNC                                    COUNT
+tlb:tlb_flush                             804
+Detaching...
+[isaiahp@localhost code]$ sudo $BCC_TOOLS/funccount t:tlb:tlb_flush -p $(pidof pingpong)
+Tracing 1 functions for "t:tlb:tlb_flush"... Hit Ctrl-C to end.
+^C
+FUNC                                    COUNT
+tlb:tlb_flush                               1
+
+
+
+
+
+##perf profiling cpu flame graph
+perf record -F 999  -C 1 -g   --  sudo taskset 2 ./pingpong
+perf script | $FG/stackcollapse-perf.pl | $FG/flamegraph.pl > pingpong.oncpu.svg
+
+
+##context switching
+./cpudist -P -O -p $(pidof pingpong) shows time spend on and off cpu -O flag is off cpu we can see this process spends just as much time off cpu as it does on cpu
+pid = 5709
+     usecs               : count     distribution
+         0 -> 1          : 0        |                                        |
+         2 -> 3          : 0        |                                        |
+         4 -> 7          : 0        |                                        |
+         8 -> 15         : 0        |                                        |
+        16 -> 31         : 0        |                                        |
+        32 -> 63         : 0        |                                        |
+        64 -> 127        : 0        |                                        |
+       128 -> 255        : 1        |                                        |
+       256 -> 511        : 0        |                                        |
+       512 -> 1023       : 2        |                                        |
+      1024 -> 2047       : 2        |                                        |
+      2048 -> 4095       : 1        |                                        |
+      4096 -> 8191       : 2        |                                        |
+      8192 -> 16383      : 738      |****************************************|
