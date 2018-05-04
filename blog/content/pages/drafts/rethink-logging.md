@@ -6,8 +6,9 @@ Logging can be an effective way of gathering data from a system and observing it
   
 ## Logging is a feature 
 There is often emphasis on designing a system for maintanability and testability, I argue that designing a system for observability is even more important as we shall see observable systems are easier to test and often can help diagonase even them most criplling problems.
-### what is observability ? 
 *"Logging is the process of recording application actions and state to a secondary interface."*  	<cite> Colin Eberhart </cite>
+### what is observability ? 
+
 
 The consumer who sees this interface, the support guy looking at the application log, does not have access to the application's primary interface. This means that what is detailed in this log should be driven by needs of the consumer of this interface; it is often the main source of information when diagnosing a problem. It can be either to diagnose bugs or gather stats or verify the correctness of a running application. 
 ![write logs for machines to read](/imgs/LOGS-FOR-MACHINES.svg)
