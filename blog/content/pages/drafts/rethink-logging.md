@@ -1,6 +1,12 @@
 Title: Rethink logging
 Date: 2018-04-29 10:20
 Category: Logging monitoring
+### TL;DR
+* Logging is a feature of a system
+* Primary consumer of logs is machines
+* Log semantically rich messages
+* Build tools to use events in logs to verify a running system
+* There are benefits to using Binary encoding 
 
 Logging can be an effective way of gathering data from a system and observing its runtime behaviour. In my experience most of application logging is ad-hoc text, which greatly diminishes the potential value of logging. Most systems tend to start off with very little logging or no logging, as the system grows and problems arise developers add additional logging, which leads to megabytes/gigabytes of similar looking text, what make things worse it often not clear what information should be logged, developers often log debug/trace level diagnostic information in development but turned off in production,  which makes it very difficult to extract meaningful information to troubleshoot a problem in production, as it may be missing crucial information.  
   
@@ -104,11 +110,16 @@ Constraints on a Solution
 To hunt cow in its native habitat, the focus of observability infrastructure must make two profound shifts: from development to production, and from programs to systems. These shifts have several important implications. First, the shift from development to production implies that observability infrastructure must have zero disabled probe effect: The mere ability to observe the system must not make the delivered system any slower. This constraint allows only one real solution: Software must be optimized when it ships, and—when one wishes to observe it—the software must be dynamically modified. Further, the shift from programs to systems demands that the entire stack must be able to be dynamically instrumented in this way, from the depths of the operating system, through the system libraries, and into the vaulted heights of higher-level languages and environments. There must be no dependency on compile-time options, having source code, restarting components, etc.; it must be assumed that the first time a body of software is to be observed, that software is already running in production.
 "
 
-
+*Machines dont read text, they read binary, dont deal with ascii number but binary*
 One important feature of a logging library should be to minimise the overhead of logging business events, in my experience working with electronic trading system, it not unusual to for system to received several 100's of market data updates event per *millisecond* traditional string based logger will cause enormous overhead. Attention needs to paid to the encoding used by the logger, a popular choice tends to be JSON as the argument is it readable by humans and machines, however JSON is a text based encoding without any type information, text based encoding like JSON can be orders of magnitude slower than binary encoding.
 Having profiled a system, text based encoding used by a logging library was the biggest consumer of CPU and memory in a business application.
 Binary encoding is not only more efficient to encode and decode but are also compact, less memory bandwith is used, which results in lower latency . 
 Prefer binary format using share memory (memory mapped files), next post I will walk thorough a simple logging library implementation in Java, using offheap share memory buffers.  
+### Text vs Binary encoding
+why text ? 
+* easy to read and debug 
+* reading ascii  unicode and utf-8 anyway we use tools to read these 
+* why not create a efficient encoding and build tools to debug and understand
 ### What should be logged
 It depends on the application, one useful way to decide what to log is to think from the consumers perspective, as this dictates the events and states that need to be observed.  
 
