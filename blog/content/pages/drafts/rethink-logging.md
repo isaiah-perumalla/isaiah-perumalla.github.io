@@ -11,16 +11,20 @@ Category: Logging monitoring
 Logging can be an effective way of gathering data from a system and observing its runtime behaviour. In my experience most of application logging is ad-hoc text, which greatly diminishes the potential value of logging. Most systems tend to start off with very little logging or no logging, as the system grows and problems arise developers add additional logging, which leads to megabytes/gigabytes of similar looking text, what make things worse it often not clear what information should be logged, developers often log debug/trace level diagnostic information in development but turned off in production,  which makes it very difficult to extract meaningful information to troubleshoot a problem in production, as it may be missing crucial information.  
   
 ## Logging is a feature 
-There is often emphasis on designing a system for maintanability and testability, I argue that designing a system for observability is even more important as we shall see observable systems are easier to test, debug and often can help diagonase even them most criplling problems. Observable software is software which allows you to answer question about itself by simply observing *facts and events* emitted by the software, however this only happens by *purposefully building this feature* in the software itself. 
+There is often emphasis on designing a system for maintanability and testability, I argue that designing a system for observability is even more important as we shall see observable systems are easier to test, debug and often can help diagnose even them most crippling problems. Observable software is software which allows you to answer question about itself by simply observing *facts and events* emitted by the software, however this only happens by *purposefully building this feature* in the software itself. 
 
 "Engineers must be empowered to take the extra time to build for debuggability — we must be secure in the knowledge that
 this pays later dividends!" 
 &mdash; <cite>[Bryan Cantrill](https://files.gotocon.com/uploads/slides/conference_3/86/original/goto-ord-170502172018.pdf)</cite>
 
-Another property of *Observable/debuggable software* is we should be able to understand the software by observing the fact and events reported by it, understanding by observation can only happend *if* the facts and events have to have semantically rich information with attached context. 
+Another property of *Observable/debuggable software* is we should be able to understand the software by observing the fact and events reported by it, In my experience understanding a complex system by observation is only possible *if* the facts and events have to have semantically rich information with attached context. 
 It can be used as a way to better understand system performance and behavior, even during the what can be perceived as “normal” operation of a system.
-Events, tracing, exception tracking are all a derivative of logs, and if one has been using any of these tools, one already has some form of “Observability”.
-Events, tracing, exception can be derived from logs, to add some form of “Observability", programmer usually do this by 
+Events, tracing, exception tracking are all a derivative of the log. 
+
+### Seperate information from representation 
+[string base logging img]
+
+To add some form of “Observability", programmers usually log events as shown below 
 
  ```
 if (logger.isInfoEnabled()) {
@@ -29,41 +33,23 @@ if (logger.isInfoEnabled()) {
    }
 
 ```
-
-
-### Seperate information from representation 
-[string base logging img]
- The other main disadvantage of unstructured text based logging and string format based logging API is the calling code is doing two things at once, recording the infomation but also now burdend with knowing how to represent the information. 
-
-```
-if (logger.isInfoEnabled()) {
-    logger.info("received price for symbol {} for date: {} with value {}", price.symbol(), price.getDate(), price.value())
-                  
-   }
-
-```
-
- The logging shown above is very common, but has conflated two concerns, recording information, but the calling code has to know how to representing the information, mixing these two concerns severely affects the flexibility and using string has a serious impact on performance.
- Logging usually used to record the following application/domain events, Errors and Metrics, 
-
- Formatted Strings are extremely inefficient to represent domain events, they should be represent as structured data with types.
-  The current defacto logging API are centered around formatted strings, in doing so we are conflating the information and the representation. Text based logging using formatted strings are popular, main reason for this the assumption that humans are the first level consumers of the logs, however when analysing logs we usually interested in a subset of information, generally tools like grep are used to extract information of interested, however this approach doesnt scale for larger applications.
- logs should not necessarily have to be closely tied to an outage or a user complaint. It can be used as a way to better understand system performance and behavior. events and facts in a log can lead a developer to the answers, but it can’t make them necessarily find it, they need to be searchable
-  critical components of the system proactively but the vast majority of these metrics are never looked at.
-
+ The logging shown above is very common, the current defacto logging API are centered around formatted strings, in doing so we are conflating the information and the representation. Text based logging using formatted strings are popular, main reason for this the assumption that humans are the first level consumers of the logs, however when analysing logs we usually interested in a subset of information, generally tools like grep or custom ad hoc scripts are used to extract information of interested, however this approach doesnt scale for larger applications.
+ The other issue with formatted string based logging is that it has conflated two concerns, recording information and how it is represented, in doing so the calling code has to know how to representing the information, mixing these two concerns severely affects the flexibility and using string usually has serious impact on performance.
+ My opinion is domain events should be represent as structured data with types.
+  
 
 ![write logs for machines to read](/imgs/LOGS-FOR-MACHINES.svg)
 
 ## Primary consumer of logs are programs
 *"Logging is the process of recording application actions and state to a secondary interface."*  	
 &mdash; <cite> Colin Eberhart </cite>
-The consumer who sees this interface, the support guy looking at the application log, does not have access to the application's primary interface. This means that what is detailed in this log should be driven by needs of the consumer of this interface; it is often the main source of information when diagnosing a problem. It can be either to diagnose bugs or gather stats or verify the correctness of a running application. 
-
-
- This may be a more contentious point, but I belived logs should be optimized for machine readability first. What I mean by this  is what is recorded in the logs should be sematically rich messages, which is later read by simple tools to extract information which can then be consumed by humans.
+The consumer who sees this interface, the support guy looking at the application log, does not have access to the application's primary interface. This means that what is detailed in this log should be driven by needs of the consumer of this interface; it is often the main source of information when diagnosing a problem.
+  
+ This may be a more contentious point, but my opinion is logs should be optimized for machine to read first. What I mean by this  is what is recorded in the logs should be sematically rich messages, which is later read by simple tools to extract information which can then be consumed by humans.
  
 When logs are optimized for consumption by other programs, it has the benefit of many interesting side effects.
-
+ It can be either to diagnose bugs or gather stats or verify the correctness of a running application, with good tooling around information in the logs can be sued to understand and improved software, not just used when a user reports a bugs or an outage has occured. 
+ 
 ![automatic verification](/imgs/duke-checking.gif)
 ### Automatic runtime and offline verification
 All the data gathered via logging is useless if nobody reacts to it, one important consequence of writing logs for machines to read is it makes to possible to write programs to do *Runtime Verification* . 
@@ -71,24 +57,19 @@ Runtime verificaiton is using data from observed events from a running system to
 
 ![auto verify interaction](/imgs/runtime_verify.PNG)
 
-* assertion of temporal logic , monitor program can also verify properties dependent on time, where time constraints can be put on states (one can only be in a state for a certain time period)
-Although there is additional work for the developer to writing verification programs, the cost of writing the tool is minimal in comparision to letting bugs creep into production software, i have used this technique recently to improve the quality of a trading system which had very little automated tests. 
-Machine readable logs with semantically rich domain events enable *Runtime verification (RV)* in my opinion is a very lightweight method aimed at verifying that a specific execution of a system satisfies or violates a given critical property. Dur-
-ing development, runtime monitoring can be used as a debugging monitor or test oracle
-for system simulation, prototyping, or tests [9]. This type of monitoring ensures testers
-are notified of all specification violations, even if they are not easily noticable by testers
-(such as short transient violations). In deployed systems, monitors can be used as a fault
-detector to trigger recovery mechanisms such as safety shutdowns	  
-
-
-
-verify temproal events 
-
-### Replay debugging
+Although there is additional work for the developer to writing verification programs, the cost of writing the tool is minimal in comparision to letting bugs creep into production software, i have used this technique recently to improve the quality of a trading system . 
+Machine readable logs with semantically rich domain events enable *Runtime verification (RV)* in my opinion is a very lightweight method aimed at verifying that a specific execution of a system satisfies or violates a given critical property. This type of monitoring ensures testers
+are notified of all specification violations, even if they are not easily noticable by testers (such as short transient violations). 
+Used events recorded in logs can used in the assertion of temporal logic, where by the verification program can also verify properties dependent on time, (where a system can only in a particular state for a certain time period).
+In deployed systems, monitors can be used as a fault detector to trigger recovery mechanisms such as safety shutdowns or automatically turn off certian software feature if a fault is detected.	  
 
 
 ### Efficient logging
-"
+Logging isnt free, Multiple gigabytes per day are commonplace now. The log files themselves are generally simple flat text files. Their size comes from the sheer volume of entries, not from being rich data types.
+
+The log file size not only consumes disk space during logging, storing, and archiving, but it also causes processing overhead when importing, analysing, and generating reports.
+
+As a result, there is value in making sure that you are logging the right level of information. This article will help you find the right balance between logging too little and too much.
 This gives rise to a paradox: Performance problems are increasingly likely to be seen in production, but they can be understood only in development. To address a performance problem seen in production, the problem must therefore be reproduced in either a development or test environment. In a software system, as in any sufficiently complicated system, disjointed pathologies can manifest the same symptoms: Reproducing symptoms (e.g., high CPU load, heavy I/O traffic, long latency transactions, etc.) does not guarantee reproducing the same underlying problem. To phrase this phenomenon in the vernacular of IT, you might have heard or said something like this:
 
 “Good news: We were able to reproduce it in dev, and we think that we found the problem. Dev has a fix, and we’re scheduling downtime for tonight to put it into prod. Let’s keep our fingers crossed...”
