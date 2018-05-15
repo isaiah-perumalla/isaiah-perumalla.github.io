@@ -65,64 +65,18 @@ In deployed systems, monitors can be used as a fault detector to trigger recover
 
 
 ### Efficient logging
-Logging isnt free, Multiple gigabytes per day are commonplace now. The log files themselves are generally simple flat text files. Their size comes from the sheer volume of entries, not from being rich data types.
+Logging isnt free, multiple gigabytes per day are commonplace now, text based logs are simple flat files, their size comes from the sheer volume of repetive strings and entries, not from being rich data types. Although disk space is cheap now, it not just log file size not only consumes disk space during logging, there is a lot of overhead for applications to continually wirte text to disk, it also causes processing overhead when importing, analysing, and for consumer programs.
+*Machines dont read text, they read binary*
+One important feature of a logging library should be to minimise the overhead of logging business events, in my experience working with electronic trading system, it common for system to received several 100's of events per *millisecond* traditional string based logger or using text based encoding will be extremenly inefficient cause enormous overhead. Attention needs to paid to the encoding used by the logger.
+#### Encoding
+A popular choice tends to be JSON as the argument is it readable by humans and machines, however JSON is a text based encoding without any type information, and is inefficient as it can be orders of magnitude slower than a binary encoding. Having profiled a system, text based encoding used by a logging library was the biggest consumer of CPU and memory in a business application. Binary encoding is not only more efficient to encode and decode but are also compact, less memory bandwith is used, which results in lower latency.
+In my experience any application or service that processes a significant amounts of events, should prefer a binary encoded format for logging. 
+Ideally use a well documented binary encoding such as [SBE](https://github.com/real-logic/simple-binary-encoding/wiki) or [FlatBuffers](https://google.github.io/flatbuffers/) and build tools to debug and understand.
 
-The log file size not only consumes disk space during logging, storing, and archiving, but it also causes processing overhead when importing, analysing, and generating reports.
-
-As a result, there is value in making sure that you are logging the right level of information. This article will help you find the right balance between logging too little and too much.
-This gives rise to a paradox: Performance problems are increasingly likely to be seen in production, but they can be understood only in development. To address a performance problem seen in production, the problem must therefore be reproduced in either a development or test environment. In a software system, as in any sufficiently complicated system, disjointed pathologies can manifest the same symptoms: Reproducing symptoms (e.g., high CPU load, heavy I/O traffic, long latency transactions, etc.) does not guarantee reproducing the same underlying problem. To phrase this phenomenon in the vernacular of IT, you might have heard or said something like this:
-
-“Good news: We were able to reproduce it in dev, and we think that we found the problem. Dev has a fix, and we’re scheduling downtime for tonight to put it into prod. Let’s keep our fingers crossed...”
-
-Only to have it followed the next day by something like this:
-
-“Hey, yeah, about that fix...well, the good news is that we are faster this morning; the bad news is that we’re only about 3 percent faster. So it’s back to the war room...”
-
-If this sounds eerily familiar, it’s because you have fallen into the trap endemic to trying to understand production problems by reproducing their symptoms elsewhere: You found a problem that was not the problem.
-
-But Wait, It Gets Worse
-The lack of observability endemic to production software is bad enough, but the layering of software abstraction makes the performance problem much more acute. Normally, software abstraction is good news, for it is abstraction that empowers one to develop an application without having to develop the Web server, application server, database server, and operating system that the application rests upon. This power has a darker side, however: When developing at higher layers of abstraction, it is easier to accidentally induce unintended or unnecessary work in the system. This is tautologically true: To be at a higher layer of abstraction, less code must induce more work, meaning it takes less of a misstep to induce more unintended consequences.
-
-Unfortunately, this unnecessary or unintended work tends to multiply as it cascades down the stack of abstraction, so much so that performance problems are typically first understood or characterized at the very lowest layer of the stack in terms of high CPU utilization, acute memory pressure, abnormal I/O activity, excessive network traffic, etc. Despite being a consequence of higher-level software, symptoms at the lowest layer of the stack are likely to be most immediately attributable to activity in the next lowest layer—for example, the operating system or the database.
-
-This presents another paradox: System performance problems are typically introduced at the highest layers of abstraction, but they are often first encountered and attributed at the lowest layers of abstraction. It is because of this paradox that we have adopted the myth that the path to performance lies nearly exclusively with faster hardware: faster CPUs, more networking bandwidth, etc. When this fails, we have taught ourselves to move to the next layer of the stack: to demand faster operating systems, faster databases, and better compilers. Improving these components undoubtedly improves performance, but (to use a perhaps insensitive metaphor) it amounts to hunting vermin: Depending on the relatively small iterative improvements at the lowest layers of the stack amounts to trying to feed a family on the likes of squirrel and skunk. If we can move up the stack—if we can find the underlying performance problems instead of merely addressing their symptoms—we can unlock much more substantial performance gains. This is bigger game to be sure; by focusing on performance problems higher in the stack, we can transition from hunting vermin to hunting cow—big, slow, stupid, tasty cow.
-
-Constraints on a Solution
-To hunt cow in its native habitat, the focus of observability infrastructure must make two profound shifts: from development to production, and from programs to systems. These shifts have several important implications. First, the shift from development to production implies that observability infrastructure must have zero disabled probe effect: The mere ability to observe the system must not make the delivered system any slower. This constraint allows only one real solution: Software must be optimized when it ships, and—when one wishes to observe it—the software must be dynamically modified. Further, the shift from programs to systems demands that the entire stack must be able to be dynamically instrumented in this way, from the depths of the operating system, through the system libraries, and into the vaulted heights of higher-level languages and environments. There must be no dependency on compile-time options, having source code, restarting components, etc.; it must be assumed that the first time a body of software is to be observed, that software is already running in production.
-"
-
-*Machines dont read text, they read binary, dont deal with ascii number but binary*
-One important feature of a logging library should be to minimise the overhead of logging business events, in my experience working with electronic trading system, it not unusual to for system to received several 100's of market data updates event per *millisecond* traditional string based logger will cause enormous overhead. Attention needs to paid to the encoding used by the logger, a popular choice tends to be JSON as the argument is it readable by humans and machines, however JSON is a text based encoding without any type information, text based encoding like JSON can be orders of magnitude slower than binary encoding.
-Having profiled a system, text based encoding used by a logging library was the biggest consumer of CPU and memory in a business application.
-Binary encoding is not only more efficient to encode and decode but are also compact, less memory bandwith is used, which results in lower latency . 
-Prefer binary format using share memory (memory mapped files), next post I will walk thorough a simple logging library implementation in Java, using offheap share memory buffers.  
-### Text vs Binary encoding
-why text ? 
-* easy to read and debug 
-* reading ascii  unicode and utf-8 anyway we use tools to read these 
-* why not create a efficient encoding and build tools to debug and understand
-### What should be logged
-It depends on the application, one useful way to decide what to log is to think from the consumers perspective, as this dictates the events and states that need to be observed.  
-
+### Errors and Counters
 #### Errors
-Unexpected errors are logged using a similar API, the stack trace provided by the exception is converted to strings, and recorded, often the same exception occurs repeatedly and is logged over and over again. 
-While reading through some of the Aeron source code, I noticed an interesting approach to recording expections. The approach taken there is to log distinct errors only with a count of the number of time the errors has occured, in addition the time of first and last observation is also recorded. This means that when the same error is experienced many times only the count and latest observation timestamp is updated, this approach is not only very efficient but also very much easier to read without loss of any information. I
+Unexpected errors are logged using a similar API, the stack trace provided by the exception is converted to strings, and recorded, often the same exception occurs repeatedly and is logged over and over again. While reading through some of the [Aeron](https://github.com/real-logic/aeron) source code, I noticed an interesting approach to recording expections. The approach taken there is to log *distinct errors* only with a count of the number of time the errors has occured, in addition the time of first and last observation is also recorded. This means that when the same error is experienced many times only the count and latest observation timestamp is updated, this approach is not only very efficient but also very much easier to read without loss of any information.
 
-#### Instrumetation and Metrics
- Logs are often used to gather metrics and instrument internal state of a system. for example often its useful to see 
+#### Counters
+In many cases we may have just keep a count of significant events observed in the system, for example there maybe an internal cache used in the system but we may need to monitor the number of cache misses. Rather than logging each cache miss, we could simply have a counter which is incremented each time a cache miss has occured.
 
-
-## Conclusion
-
-#### stats and metrics
-
-it should be a first class citizen in your domain model, this will avoid logging unhandled expections and carrying on with execution.
-It is important to think about the consumer of the log messsage. Logging usually can be split up in to the following categories
-* support logging
-* event logs Trace recording
-* Metrics and instrumentation
-## logs should be structure
-logs are stream of structured data 
-### Errors
-### Counters
-### efficient and minimal overhead
