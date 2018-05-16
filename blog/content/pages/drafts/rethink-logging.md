@@ -22,11 +22,10 @@ It can be used as a way to better understand system performance and behavior, ev
 Events, tracing, exception tracking are all a derivative of the log. 
 
 ### Seperate information from representation 
-[string base logging img]
 
 To add some form of “Observability", programmers usually log events as shown below 
 
- ```
+```
 if (logger.isInfoEnabled()) {
     logger.info("received price for symbol {} for date: {} with value {}", price.symbol(), price.getDate(), price.value())
                   
@@ -63,11 +62,12 @@ are notified of all specification violations, even if they are not easily notica
 Used events recorded in logs can used in the assertion of temporal logic, where by the verification program can also verify properties dependent on time, (where a system can only in a particular state for a certain time period).
 In deployed systems, monitors can be used as a fault detector to trigger recovery mechanisms such as safety shutdowns or automatically turn off certian software feature if a fault is detected.	  
 
-
+![no strings](/imgs/duke-strings.gif)
 ### Efficient logging
 Logging isnt free, multiple gigabytes per day are commonplace now, text based logs are simple flat files, their size comes from the sheer volume of repetive strings and entries, not from being rich data types. Although disk space is cheap now, it not just log file size not only consumes disk space during logging, there is a lot of overhead for applications to continually wirte text to disk, it also causes processing overhead when importing, analysing, and for consumer programs.
 *Machines dont read text, they read binary*
 One important feature of a logging library should be to minimise the overhead of logging business events, in my experience working with electronic trading system, it common for system to received several 100's of events per *millisecond* traditional string based logger or using text based encoding will be extremenly inefficient cause enormous overhead. Attention needs to paid to the encoding used by the logger.
+
 #### Encoding
 A popular choice tends to be JSON as the argument is it readable by humans and machines, however JSON is a text based encoding without any type information, and is inefficient as it can be orders of magnitude slower than a binary encoding. Having profiled a system, text based encoding used by a logging library was the biggest consumer of CPU and memory in a business application. Binary encoding is not only more efficient to encode and decode but are also compact, less memory bandwith is used, which results in lower latency.
 In my experience any application or service that processes a significant amounts of events, should prefer a binary encoded format for logging. 
