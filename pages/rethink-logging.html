@@ -72,7 +72,10 @@ Events, tracing, exception tracking are all a derivative of the log. </p>
 <p>The logging shown above is very common, the current defacto logging API are centered around formatted strings, in doing so we are conflating the information and the representation. Text based logging using formatted strings are popular, main reason for this the assumption that humans are the first level consumers of the logs, however when analysing logs we usually interested in a subset of information, generally tools like grep or custom ad hoc scripts are used to extract information of interested, however this approach doesnt scale for larger applications.
  The other issue with formatted string based logging is that it has conflated two concerns, recording information and how it is represented, in doing so the calling code has to know how to representing the information, mixing these two concerns severely affects the flexibility and using string usually has serious impact on performance.
  My opinion is domain events should be represent as structured data with types.</p>
-<p><img alt="write logs for machines to read" src="/imgs/LOGS-FOR-MACHINES.svg"></p>
+<p><svg>
+        <image href="/imgs/LOGS-FOR-MACHINES.svg" />
+        </svg>
+        </p>
 <h2>Primary consumer of logs are programs</h2>
 <p><em>"Logging is the process of recording application actions and state to a secondary interface."</em>   <br>
 &mdash; <cite> Colin Eberhart </cite>
