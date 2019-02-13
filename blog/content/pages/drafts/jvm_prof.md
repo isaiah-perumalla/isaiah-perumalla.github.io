@@ -1,3 +1,6 @@
+Title: Profiling JVM applications
+Date: 2019-02-14 10:20
+Category: performance java monitoring
 # JVM Profiling gotchas 
 Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. Profiling regularly also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.  
 Profiling help us focus our effors on parts of the code which are most critical within an application and this should be used to guide our optimization efforts.
@@ -10,7 +13,13 @@ This post is just some of my notes on how profiling tools (sampling profilers in
 
 
 ## How profiler work 1000 ft view
-
+```
+:::python hl_lines="1 3"
+    # This line is emphasized
+    # This line isn't
+    # This line is emphasized
+```
+<script src="https://gist.github.com/isaiah-perumalla/5f5b1587acb4fbcb20cf.js"></script>
 ## Why JVM profiling is hard !
 
 ## Execution Profiling experiment

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*- #
 from __future__ import unicode_literals
+import pelican_gist
 
 AUTHOR = 'isaiah_p'
 SITENAME = 'Isaiah Perumalla'
@@ -22,12 +23,19 @@ TRANSLATION_FEED_ATOM = None
 AUTHOR_FEED_ATOM = None
 AUTHOR_FEED_RSS = None
 
+MARKDOWN = {
+    'extension_configs': {
+        'markdown.extensions.codehilite': {'css_class': 'codehilite'},
+        'markdown.extensions.extra': {},
+        'markdown.extensions.meta': {},
+    },
+    'output_format': 'html5',
+}
+
 MENUITEMS = (
     ('About', '/pages/about.html'),
     ('Archives', '{0}/archives.html'.format(SITEURL)), )
-PLUGINS = [
-    'pelican_gist',
-]
+
 # Blogroll
 LINKS = (('Pelican', 'http://getpelican.com/'),
          ('Python.org', 'http://python.org/'),
