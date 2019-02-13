@@ -25,7 +25,9 @@ AUTHOR_FEED_RSS = None
 MENUITEMS = (
     ('About', '/pages/about.html'),
     ('Archives', '{0}/archives.html'.format(SITEURL)), )
-
+PLUGINS = [
+    'pelican_gist',
+]
 # Blogroll
 LINKS = (('Pelican', 'http://getpelican.com/'),
          ('Python.org', 'http://python.org/'),
