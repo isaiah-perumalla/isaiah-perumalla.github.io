@@ -116,17 +116,16 @@ img-circle {
     display: flex;
     flex-direction: column;
     justify-content: space-evenly;
-    background: #3c3838;
 }
 
 
 
 header #social a:link {
-  color: white;
+  color: black;
 }
 
 header #social a:visited {
-  color: white;
+  color: black;
 }
 
 
