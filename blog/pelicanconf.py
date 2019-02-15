@@ -32,8 +32,9 @@ MARKDOWN = {
 }
 
 MENUITEMS = (
+    ('Home', '/index.html'),
     ('About', '/pages/about.html'),
-    ('Archives', '{0}/archives.html'.format(SITEURL)), )
+)
 
 # Blogroll
 LINKS = (('Pelican', 'http://getpelican.com/'),
