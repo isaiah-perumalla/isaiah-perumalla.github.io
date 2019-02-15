@@ -91,6 +91,16 @@ img {
   margin-bottom: 0;
 }
 
+h1.entry-title {
+  font-family: inconsolata,monospace;
+  letter-spacing: -.005rem;
+  text-transform: uppercase;
+  font-size: 1.9375rem;
+  line-height: 2.25rem;
+  margin-top: 1.625rem;
+  font-weight: 700;
+}
+
 img-circle {
     vertical-align: middle;
     border-radius: 50%;
@@ -120,12 +130,15 @@ img-circle {
 
 
 
-header #social a:link {
-  color: black;
-}
-
-header #social a:visited {
-  color: black;
+header #social a {
+  font-family: inconsolata,monospace;
+  letter-spacing: -.005rem;
+  text-transform: uppercase;
+  font-size: 1.4rem;
+  line-height: 2.25rem;
+  margin-top: 1.625rem;
+  font-weight: 700;
+  
 }
 
 
