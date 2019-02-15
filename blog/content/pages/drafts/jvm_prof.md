@@ -1,15 +1,20 @@
 Title: Profiling JVM applications
 Date: 2019-02-14 10:20
 Category: performance java monitoring
-# JVM Profiling gotchas 
-Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. Profiling regularly also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.  
+# JVM application Profiling 
+Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code, it also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.  
+
+>"A good programmer will be wise to look carefully at the critcal coe; but **only after**" that code has been **indentified** " -- D Knuth
+>"
+
 Profiling help us focus our effors on parts of the code which are most critical within an application and this should be used to guide our optimization efforts.
 
-"A good programmer will be wise to look carefully at the critcal coe; but **only after**" that code has been **indetified** " -- D Knuth
+Without a profiler it is almost impossible to identify critical code in large software, however developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a **cold** method and produce no performance improvement in applciation.
 
-"
-Without a profiler it is almost impossible to identify critical code in large software, 
-This post is just some of my notes on how profiling tools (sampling profilers in particular ) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard ! and things developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a **cold** method and produce no performance improvement in applciation.
+This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular ) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !
+
+* How profilers work in general
+* Profiling JVM applications is hard 
 
 
 ## How profiler work 1000 ft view
