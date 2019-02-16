@@ -11,13 +11,13 @@
         <link href="/theme/css/sanitize.css" rel="stylesheet">
 
         <!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-109572315-1"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-134619110-1"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
-  gtag('config', 'UA-109572315-1');
+  gtag('config', 'UA-134619110-1');
 </script>
 
 </head>
@@ -39,14 +39,24 @@
     <h1>Profiling JVM applications</h1>
     
 
-    <h1>JVM Profiling gotchas</h1>
-<p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. Profiling regularly also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.<br>
-Profiling help us focus our effors on parts of the code which are most critical within an application and this should be used to guide our optimization efforts.</p>
-<p>"A good programmer will be wise to look carefully at the critcal coe; but <strong>only after</strong>" that code has been <strong>indetified</strong> " -- D Knuth</p>
-<p>"
-Without a profiler it is almost impossible to identify critical code in large software, 
-This post is just some of my notes on how profiling tools (sampling profilers in particular ) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard ! and things developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a <strong>cold</strong> method and produce no performance improvement in applciation.</p>
+    <h1>JVM application Profiling</h1>
+<p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code, it also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.  </p>
+<blockquote>
+<p>"A good programmer will be wise to look carefully at the critcal coe; but <strong>only after</strong>" that code has been <strong>indentified</strong> " -- D Knuth
+"</p>
+</blockquote>
+<p>Profiling help us focus our effors on parts of the code which are most critical within an application and this should be used to guide our optimization efforts.</p>
+<p>Without a profiler it is almost impossible to identify critical code in large software, however developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a <strong>cold</strong> method and produce no performance improvement in applciation.</p>
+<p>This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular ) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !</p>
+<ul>
+<li>How profilers work in general</li>
+<li>Profiling JVM applications is hard </li>
+</ul>
 <h2>How profiler work 1000 ft view</h2>
+<p>In this section we go through quick overview of how profiler work in general under linux (should be similar for other OS). The OS kernel know exactly which process is currenlty scheduled on the CPU, the <em>SIGPROF</em> posix signal is used to interrupt the thread running on the cpu, at specified interval. When signal Sampling profilers collects samples of application code periodically. This is done by using <em>SIGPROF</em> posix signal, the signal can be set up to execute an event handler at specific intervals.
+1) get the instruction pointer and frame pointer of process that was executing on cpu
+2) record the stack frame
+3) use the instruction pointer or frame pointer to map the addres to function</p>
 <div class="codehilite"><pre><span></span><span class="hll">    <span class="c1"># This line is emphasized</span>
 </span>    <span class="c1"># This line isn&#39;t</span>
 <span class="hll">    <span class="c1"># This line is emphasized</span>
