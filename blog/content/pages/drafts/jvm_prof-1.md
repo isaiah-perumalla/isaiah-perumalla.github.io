@@ -1,30 +1,25 @@
 Title: Profiling JVM applications
 Date: 2019-02-14 10:20
 Category: performance java monitoring
-# JVM application Profiling 
-Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code, it also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.  
+# Notes on JVM application Profiling 
+Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. 
 
 >"A good programmer will be wise to look carefully at the critcal coe; but **only after**" that code has been **indentified** " -- D Knuth
 >"
 
-Profiling help us focus our effors on parts of the code which are most critical within an application and this should be used to guide our optimization efforts.
+Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. 
+
+> 
+
 
 Without a profiler it is almost impossible to identify critical code in large software, however developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a **cold** method and produce no performance improvement in applciation.
 
-This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular ) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !
+This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !
+## JVM code execution in a nutshell
 
-* How profilers work in general
-* Profiling JVM applications is hard 
+##
 
 
-## How profiler work 1000 ft view
-```
-:::python hl_lines="1 3"
-    # This line is emphasized
-    # This line isn't
-    # This line is emphasized
-```
-<script src="https://gist.github.com/isaiah-perumalla/5f5b1587acb4fbcb20cf.js"></script>
 ## Why JVM profiling is hard !
 
 ## Execution Profiling experiment
@@ -100,5 +95,5 @@ Most popular profilers on the JVM use
 potentially misleading JVM RUNNABLE state does not mean thread is actually consuming cpu, it important to be aware of thsi when reading visualVM output.
 **threads blocking in calls to native methods appear in the JVM as RUNNABLE, and hence are reported by VisualVM as Running (and as consuming 100% CPU)**
 
-
+<a name="ref-1"> [1] there are tools to get symbol info for JIT compiled code [perf-map agent](https://github.com/jvm-profiling-tools/perf-map-agent) </a> 
  

@@ -11,7 +11,7 @@ STATIC_PATHS = ['imgs', 'downloads']
 
 THEME = 'mc-pelican'
 TIMEZONE = 'Europe/London'
-GOOGLE_ANALYTICS_ID = 'UA-109572315-1'
+GOOGLE_ANALYTICS_ID = 'UA-134619110-1'
 
 DEFAULT_LANG = 'en'
 
