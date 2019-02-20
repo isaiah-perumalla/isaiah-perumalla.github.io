@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>how Sampling profilers work</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name=viewport content="width=device-width, initial-scale=1">
+        <meta name=”description” content=”isaiah perumalla tech blog, Alogrithms, Java, Java performance, profiling, linux, Python, Linux”>
+        <link href="/theme/css/theme.css" rel="stylesheet">
+        <link href="/theme/css/code_styles.css" rel="stylesheet">
+        <link href="/theme/css/custom.css" rel="stylesheet">
+        <link href="/theme/css/sanitize.css" rel="stylesheet">
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-134619110-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-134619110-1');
+</script>
+
+</head>
+
+<body id="index" class="home">
+<header id="page-header">
+<div id="site-title" class="col span_6">
+    </div>
+        <nav id="social">
+            <ul>
+            <li><a href="/index.html">Home</a></li>
+            <li><a href="/pages/about.html">About</a></li>
+            
+            
+        </ul>
+        </nav><!-- /#menu -->
+
+    </header> 
+    <h1>how Sampling profilers work</h1>
+    
+
+    <h2>How execution profilers work (1000 ft view)</h2>
+<p>In this section we go through simplified view of how profiler work in general. </p>
+<h3>User-space profilers</h3>
+<p>A program can be setup to profile its own execution using a linux sys call <a href="https://linux.die.net/man/2/setitimer">setitimer(2)</a> this facilitates a user-space program to be interrupted and notified with the <em>SIGPROF</em> posix signal, at specified interval. A signal handler is be set up to execute each time the process receives this signal from kernel. 
+1) get the instruction pointer that was executing on cpu
+2) make a copy of programs stack trace
+3) use the instruction pointer and unwind the stack to map the address to function names using a symbol table</p>
+<h3>Challenges of JIT compiled languages</h3>
+<p>Could we not use the same approach outlined above to profile application running on JVM ?
+As we saw earlier JVM is an adaptive runtime, at any given point any when a sample is collected of the follwing 
+1) the interpreter could be executing the java bytecode, a sample collected at this point the instruction pointer simply would tell us which part of interpreter code the JVM is executing, there is no way to know which <strong>Java method</strong> it was executing
+2) JVM could be doing some house keeping either doing GC or JIT compiling some bytecode to machine code or even deoptimizing some machine code, while a sample here would give us no info on what is happening with applicaton code.
+3) Suppose a we have a sample when the JIT compiled application code was running, we could have instruction pointer, but there is no way to unwind the stack and map it to java method,since the machine code is generated at runtime we dont have a symbol table, so issue here is how do <strong>Mapping JIT Compiled methods</strong> to java symbols <a href="#ref-1">[1]</a>. 
+The other issue we could have two samples with same intruction pointer but they could *<em>potentially</em> be part of two completely different methods, the JIT could have regenerated machine code between samples and reused the same memory address.</p>
+<h2>JVM tooling interface</h2>
+
+
+        
+</body>
+</html>

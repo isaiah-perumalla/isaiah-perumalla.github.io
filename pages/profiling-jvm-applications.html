@@ -39,50 +39,80 @@
     <h1>Profiling JVM applications</h1>
     
 
-    <h1>JVM application Profiling</h1>
-<p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code, it also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context.  </p>
+    <h1>Notes on JVM application Profiling</h1>
+<p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. </p>
 <blockquote>
 <p>"A good programmer will be wise to look carefully at the critcal coe; but <strong>only after</strong>" that code has been <strong>indentified</strong> " -- D Knuth
 "</p>
 </blockquote>
-<p>Profiling help us focus our effors on parts of the code which are most critical within an application and this should be used to guide our optimization efforts.</p>
+<p>Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. </p>
+<blockquote></blockquote>
 <p>Without a profiler it is almost impossible to identify critical code in large software, however developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a <strong>cold</strong> method and produce no performance improvement in applciation.</p>
-<p>This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular ) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !</p>
-<ul>
-<li>How profilers work in general</li>
-<li>Profiling JVM applications is hard </li>
-</ul>
-<h2>How profiler work 1000 ft view</h2>
-<p>In this section we go through quick overview of how profiler work in general under linux (should be similar for other OS). The OS kernel know exactly which process is currenlty scheduled on the CPU, the <em>SIGPROF</em> posix signal is used to interrupt the thread running on the cpu, at specified interval. When signal Sampling profilers collects samples of application code periodically. This is done by using <em>SIGPROF</em> posix signal, the signal can be set up to execute an event handler at specific intervals.
-1) get the instruction pointer and frame pointer of process that was executing on cpu
-2) record the stack frame
-3) use the instruction pointer or frame pointer to map the addres to function</p>
-<div class="codehilite"><pre><span></span><span class="hll">    <span class="c1"># This line is emphasized</span>
-</span>    <span class="c1"># This line isn&#39;t</span>
-<span class="hll">    <span class="c1"># This line is emphasized</span>
-</span></pre></div>
-
-
-<script src="https://gist.github.com/isaiah-perumalla/5f5b1587acb4fbcb20cf.js"></script>
-
-<h2>Why JVM profiling is hard !</h2>
+<p>This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !</p>
+<h2>JVM code execution in a nutshell</h2>
+<h2></h2>
 <h2>Execution Profiling experiment</h2>
 <p>As we shall see it is very easy to be misled by the output of the profilers, we use a sample program with <strong>known</strong> performance bottlenecks to help us uncover systematic errors outputted by profiler . </p>
 <h3>Sample program</h3>
-<p>The program which we will profile is a very simple tcp server using <a href="">netty.io</a>, which simply accepts client connects and streams random FX rate in ascii format. Netty is an asynchronous event-driven network application framework desinged to handle many concurent network connection using very small numberof threads. In order to optimize resource use, and a single EventLoop may be used to service many clients. As application developer it is crucial not run long running task or do blocking I/O on the event loop thread.
-In this sample program we will insert cpu bound work which is run on the eventloop thread to see how well profilers help us identify this. (dont really need to know anything about netty to follow this)</p>
-<div class="codehilite"><pre><span></span>
+<p>The program which we will profile is a very simple tcp server using <a href="">netty.io</a>, which simply accepts client connects and streams random FX rate in ascii format. Netty is an asynchronous event-driven network application framework desinged to handle thousand's clients simultaneously network connections using 1 or very few number of threads. In order to optimize resource use, and a single EventLoop may be used to service many clients. As application developer it is crucial not run long running task or do blocking I/O on the event loop thread.
+In this sample program we will insert <strong>cpu bound</strong> work which is run on the eventloop thread to see how well profilers help us identify this. (dont really need to know anything about netty to follow this)</p>
+<p>The highlighted lines below show where most of the cpu intesive work is.</p>
+<div class="codehilite"><pre><span></span><span class="kd">private</span> <span class="kt">float</span> <span class="nf">computeRandRate</span><span class="o">(</span><span class="kt">int</span> <span class="n">limit</span><span class="o">)</span> <span class="o">{</span>
+        <span class="kt">long</span> <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">hogCPUCycles</span><span class="o">(</span><span class="n">limit</span><span class="o">);</span>
+        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+        <span class="o">}</span>
+        <span class="n">Random</span> <span class="n">rand</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">(</span><span class="n">value</span><span class="o">);</span>
+        <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">rand</span><span class="o">.</span><span class="na">nextFloat</span><span class="o">();</span>
+    <span class="o">}</span>
+<span class="hll">
+</span>    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">long</span> <span class="nf">hogCPUCycles</span><span class="o">(</span><span class="kt">int</span> <span class="n">limit</span><span class="o">)</span> <span class="o">{</span>
+        <span class="kt">long</span> <span class="n">sum</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+<span class="hll">        <span class="n">Random</span> <span class="n">rand</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">();</span>
+</span><span class="hll">        <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class="hll">            <span class="kt">int</span> <span class="n">randIndex</span> <span class="o">=</span> <span class="n">Math</span><span class="o">.</span><span class="na">abs</span><span class="o">(</span><span class="n">rand</span><span class="o">.</span><span class="na">nextInt</span><span class="o">()</span> <span class="o">%</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">);</span>
+</span><span class="hll">            <span class="kt">int</span> <span class="n">v</span> <span class="o">=</span> <span class="n">values</span><span class="o">[</span><span class="n">randIndex</span><span class="o">];</span>
+</span><span class="hll">            <span class="n">sum</span> <span class="o">+=</span> <span class="n">v</span><span class="o">;</span>
+</span>        <span class="o">}</span>
+        <span class="k">return</span> <span class="n">sum</span><span class="o">;</span>
+    <span class="o">}</span>
+
+<span class="nd">@Override</span>
+    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">channelActive</span><span class="o">(</span><span class="n">ChannelHandlerContext</span> <span class="n">ctx</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">Channel</span> <span class="n">channel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="na">channel</span><span class="o">();</span>
+        <span class="n">logInfo</span><span class="o">(</span><span class="s">&quot;connected to: &quot;</span>  <span class="o">+</span> <span class="n">channel</span><span class="o">.</span><span class="na">remoteAddress</span><span class="o">(),</span> <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">);</span>
+        <span class="n">schedule</span> <span class="o">=</span> <span class="n">channel</span><span class="o">.</span><span class="na">eventLoop</span><span class="o">().</span><span class="na">scheduleAtFixedRate</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+            <span class="k">try</span> <span class="o">{</span>
+                <span class="kt">float</span> <span class="n">rate</span> <span class="o">=</span> <span class="n">computeRandRate</span><span class="o">(</span><span class="mi">4</span> <span class="o">*</span> <span class="mi">1000_000</span><span class="o">);</span>
+                <span class="n">String</span> <span class="n">s</span> <span class="o">=</span> <span class="n">Float</span><span class="o">.</span><span class="na">toString</span><span class="o">(</span><span class="n">rate</span><span class="o">);</span>
+                <span class="n">ByteBuf</span> <span class="n">rateBytes</span> <span class="o">=</span> <span class="n">Unpooled</span><span class="o">.</span><span class="na">copiedBuffer</span><span class="o">(</span><span class="n">s</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="n">StandardCharsets</span><span class="o">.</span><span class="na">US_ASCII</span><span class="o">));</span>
+                <span class="n">channel</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">GBPUSD</span><span class="o">);</span>
+                <span class="n">channel</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">rateBytes</span><span class="o">);</span>
+                <span class="n">channel</span><span class="o">.</span><span class="na">writeAndFlush</span><span class="o">(</span><span class="n">CR_LF</span><span class="o">);</span>
+                <span class="n">logInfo</span><span class="o">(</span><span class="n">s</span><span class="o">,</span> <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">);</span>
+            <span class="o">}</span>
+            <span class="k">catch</span> <span class="o">(</span><span class="n">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+                <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+            <span class="o">}</span>
+        <span class="o">},</span> <span class="mi">0</span><span class="o">,</span> <span class="mi">500</span><span class="o">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">);</span>
+
+    <span class="o">}</span>
 </pre></div>
 
 
+<h3>Evaluation of common profilers</h3>
+<p>To evaluate common profilers we use a sample program above with <strong>known</strong> performance bottlenecks </p>
+<h4>exection profiling with jVisualVM</h4>
+<p>potentially misleading JVM RUNNABLE state does not mean thread is actually consuming cpu, it important to be aware of thsi when reading visualVM output.
+<strong>threads blocking in calls to native methods appear in the JVM as RUNNABLE, and hence are reported by VisualVM as Running (and as consuming 100% CPU)</strong></p>
 <h2>Background</h2>
 <p>Understanding how profilers work help us to better use profiling tool. We need to cover some background which will be needed for rest of the post.
 The JVM itself is large complex piece of software which consists of several major components 
 Byte code interpreter, JIT compiler, Garbage-Collector (GC).</p>
 <p>javac compiler converts source to class files which are JVM bytecodes, the JVM starts off Java programs by running a byte code interpreter to executing bytecodes the interpreter itself is a simple stack-based machine. While bytecodes are executed by the interpreter, the JVM keeps track of <strong>hot spots</strong> in the code by observing most frequently executed parts of code. To acheive maximal performace the code must execute directly on native cpu, to acheive this, parts of of the code identified as <strong>hot spots</strong> is then compiled to machine code by the JIT (just in time compiler). The code now running on the cpu is could be significantly different from  the source code that was written as JIT compiler does sophisticated optimizations, based on statistics and trace information gathered while executing the bytecodes.
 The third main component GC manages the allocation and release of heap based memory, this is a not deterministic process which recycles heap memory that is no longer used by the running application.</p>
-<h3>Evaluation of common profilers</h3>
-<p>To evaluate common profilers we use a sample program with <strong>known</strong> performance bottlenecks </p>
 <h3>Safepoints</h3>
 <p>The JVM need to carry out some of the core task mentioned above it need to a way to stop all running applications threads, 
 so it is <strong>safe</strong> to either recycle memory or compile bycodes to machine code.
@@ -112,9 +142,7 @@ Most popular profilers on the JVM use
 <a href="https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#whatIs">JVM Tool Tnterface </a><a href="https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#GetStackTrace">GetStackTrace</a> to obtain stack trace sample. however there are a couple of major drawbacks when using this interface to sample stack-traces
 1) the stack-trace can only be obtained when the application code reaches a <strong>SafePoint</strong> . What this means is the sample can only be of code that can reach a safepoint. In the JVM not all code can reach a safepoint, example in a <strong>counted</strong> loop (ie loop with a bounds know at compile time) a safepoint cannot exist in here, another example is if your application spends a lot of time executing native code via JNI call, this will also not show up in samples, this skews the distribution of the samples which can make the profiler inaccurate. 
 2) The other issue is <a href="https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html#GetStackTrace">GetStackTrace</a> waits for all application threads to reach a safe point before a sample can be taken, this can potentially induce large overheads in the application that is being profiled, to make things worse this is called for each application thread for example if there are 10 application threads running, then collecting a stack sample will casue all application thread to come to a safepoint 10 times. if an application thread that is preempted by the OS but not at a safepoint, we have to wait until this is scheduled back on to the cpu and <strong>has</strong> reached a safepoint. </p>
-<h4>jVisualVM</h4>
-<p>potentially misleading JVM RUNNABLE state does not mean thread is actually consuming cpu, it important to be aware of thsi when reading visualVM output.
-<strong>threads blocking in calls to native methods appear in the JVM as RUNNABLE, and hence are reported by VisualVM as Running (and as consuming 100% CPU)</strong></p>
+<p><a name="ref-1"> [1] there are tools to get symbol info for JIT compiled code <a href="https://github.com/jvm-profiling-tools/perf-map-agent">perf-map agent</a> </a> </p>
 
 
         
