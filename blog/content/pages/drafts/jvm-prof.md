@@ -1,43 +1,69 @@
-Title: Profiling JVM applications
-Date: 2019-02-14 10:20
-Category: performance java monitoring
-# Notes on JVM application Profiling 
-Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. 
-
->"A good programmer will be wise to look carefully at the critcal coe; but **only after**" that code has been **indentified** " -- D Knuth
->"
-
-Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. 
-
-> 
-
-
 Without a profiler it is almost impossible to identify critical code in large software, however developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a **cold** method and produce no performance improvement in applciation.
 
 This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !
-## JVM code execution in a nutshell
-
-##
-
-
-## Why JVM profiling is hard !
 
 ## Execution Profiling experiment
 As we shall see it is very easy to be misled by the output of the profilers, we use a sample program with **known** performance bottlenecks to help us uncover systematic errors outputted by profiler . 
 
 ### Sample program
 
-The program which we will profile is a very simple tcp server using [netty.io](), which simply accepts client connects and streams random FX rate in ascii format. Netty is an asynchronous event-driven network application framework desinged to handle many concurent network connection using very small numberof threads. In order to optimize resource use, and a single EventLoop may be used to service many clients. As application developer it is crucial not run long running task or do blocking I/O on the event loop thread.
-In this sample program we will insert cpu bound work which is run on the eventloop thread to see how well profilers help us identify this. (dont really need to know anything about netty to follow this)
+The program which we will profile is a very simple tcp server using [netty.io](), which simply accepts client connects and streams random FX rate in ascii format. Netty is an asynchronous event-driven network application framework desinged to handle thousand's clients simultaneously network connections using 1 or very few number of threads. In order to optimize resource use, and a single EventLoop may be used to service many clients. As application developer it is crucial not run long running task or do blocking I/O on the event loop thread.
+In this sample program we will insert **cpu bound** work which is run on the eventloop thread to see how well profilers help us identify this. (dont really need to know anything about netty to follow this)
+
+The highlighted lines below show where most of the cpu intesive work is.
 
 ```
+:::java hl_lines="11 14 15 16 17 18"
+private float computeRandRate(int limit) {
+    long value = 0;
+    try {
+        value = hogCPUCycles(limit);
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    Random rand = new Random(value);
+    return 1 + rand.nextFloat();
+}
 
+private static long hogCPUCycles(int limit) {
+    long sum = 0;
+    Random rand = new Random();
+    for(int i = 0; i < limit; i++) {
+        int randIndex = Math.abs(rand.nextInt() % values.length);
+        int v = values[randIndex];
+        sum += v;
+    }
+    return sum;
+}
+
+@Override
+public void channelActive(ChannelHandlerContext ctx) {
+    Channel channel = ctx.channel();
+    logInfo("connected to: "  + channel.remoteAddress(), System.out);
+    schedule = channel.eventLoop().scheduleAtFixedRate(() -> {
+        try {
+            float rate = computeRandRate(4 * 1000_000);
+            String s = Float.toString(rate);
+            ByteBuf rateBytes = Unpooled.copiedBuffer(s.getBytes(StandardCharsets.US_ASCII));
+            channel.write(GBPUSD);
+            channel.write(rateBytes);
+            channel.writeAndFlush(CR_LF);
+            logInfo(s, System.out);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }, 0, 500, TimeUnit.MILLISECONDS);
+
+}    
 ```
+### Evaluation of common profilers
+To evaluate common profilers we use a sample program above with **known** performance bottlenecks 
 
 
-
-
-
+#### exection profiling with jVisualVM
+potentially misleading JVM RUNNABLE state does not mean thread is actually consuming cpu, it important to be aware of thsi when reading visualVM output.
+**threads blocking in calls to native methods appear in the JVM as RUNNABLE, and hence are reported by VisualVM as Running (and as consuming 100% CPU)**
 
 ## Background
 
@@ -48,8 +74,6 @@ Byte code interpreter, JIT compiler, Garbage-Collector (GC).
 javac compiler converts source to class files which are JVM bytecodes, the JVM starts off Java programs by running a byte code interpreter to executing bytecodes the interpreter itself is a simple stack-based machine. While bytecodes are executed by the interpreter, the JVM keeps track of **hot spots** in the code by observing most frequently executed parts of code. To acheive maximal performace the code must execute directly on native cpu, to acheive this, parts of of the code identified as **hot spots** is then compiled to machine code by the JIT (just in time compiler). The code now running on the cpu is could be significantly different from  the source code that was written as JIT compiler does sophisticated optimizations, based on statistics and trace information gathered while executing the bytecodes.
 The third main component GC manages the allocation and release of heap based memory, this is a not deterministic process which recycles heap memory that is no longer used by the running application.
 
-### Evaluation of common profilers
-To evaluate common profilers we use a sample program with **known** performance bottlenecks 
 
 
 
@@ -91,9 +115,6 @@ Most popular profilers on the JVM use
 
 
 
-#### jVisualVM
-potentially misleading JVM RUNNABLE state does not mean thread is actually consuming cpu, it important to be aware of thsi when reading visualVM output.
-**threads blocking in calls to native methods appear in the JVM as RUNNABLE, and hence are reported by VisualVM as Running (and as consuming 100% CPU)**
 
 <a name="ref-1"> [1] there are tools to get symbol info for JIT compiled code [perf-map agent](https://github.com/jvm-profiling-tools/perf-map-agent) </a> 
  

@@ -24,7 +24,7 @@ AUTHOR_FEED_RSS = None
 
 MARKDOWN = {
     'extension_configs': {
-        'markdown.extensions.codehilite': {'css_class': 'codehilite'},
+        #'markdown.extensions.codehilite': {'css_class': 'codehilite'},
         'markdown.extensions.extra': {},
         'markdown.extensions.meta': {},
     },

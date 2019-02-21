@@ -31,13 +31,15 @@
         <link href="{{ FEED_DOMAIN }}/{{ TAG_FEED_RSS|format(tag.slug) }}" type="application/rss+xml" rel="alternate" title="{{ SITENAME }} Tags RSS Feed" />
         {% endif %}
         <link href="{{ SITEURL }}/theme/css/theme.css" rel="stylesheet">
-        <link href="{{ SITEURL }}/theme/css/code_styles.css" rel="stylesheet">
+        <link href="{{ SITEURL }}/theme/css/solarized-dark.css" rel="stylesheet">
         <link href="{{ SITEURL }}/theme/css/custom.css" rel="stylesheet">
         <link href="{{ SITEURL }}/theme/css/sanitize.css" rel="stylesheet">
         {% endblock head %}
 
         <!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id={{GOOGLE_ANALYTICS_ID}}"></script>
+<script src="{{ SITEURL }}/theme/js/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
@@ -83,6 +85,7 @@
 
         {% if DESCRIPTION %}
         <footer id="contentinfo" class="body">
+            <script defer src="{{ SITEURL }}/theme/js/prism.js"></script>
           <hr>
           {{ DESCRIPTION }}
         </footer><!-- /#contentinfo -->

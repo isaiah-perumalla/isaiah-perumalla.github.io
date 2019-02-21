@@ -17,7 +17,7 @@ textarea{resize:vertical}
 a{text-decoration:none}
 audio,canvas,iframe,img,svg,video{vertical-align:middle}
 button,input,select,textarea{background-color:transparent;color:inherit;font-family:inherit;font-style:inherit;font-weight:inherit;min-height:1.5em}
-code,kbd,pre,samp{font-family:monospace,monospace}
+samp{font-family:monospace,monospace}
 nav ol,nav ul{list-style:none}
 select{-moz-appearance:none;-webkit-appearance:none}
 select::-ms-expand{display:none}

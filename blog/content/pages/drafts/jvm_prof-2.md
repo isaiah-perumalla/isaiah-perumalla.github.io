@@ -1,6 +1,10 @@
 Title: how Sampling profilers work
 Date: 2019-02-18 10:20
 Category: performance java monitoring
+# Notes on JVM application Profiling 
+Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. 
+Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. 
+
 
 ## How execution profilers work (1000 ft view)
 In this section we go through simplified view of how profiler work in general. 
