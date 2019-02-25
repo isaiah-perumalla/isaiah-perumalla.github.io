@@ -42,9 +42,9 @@
     <h1>Notes on JVM application Profiling</h1>
 <p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. 
 Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. </p>
-<p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a>
-2) <a href="#measure-dont-guess">case for measuring JVM applications</a>
-3) <a href="">Execution Profiling experiment using common tools</a> </p>
+<p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a></p>
+<p>2) <a href="#measure-dont-guess">case for measuring JVM applications</a></p>
+<p>3) <a href="">Execution Profiling experiment using common tools</a> </p>
 <h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
 <p>In this section we describe how the JVM actually executes code, this should provide motivation for why it is even more important to measure and identify hotspots in your application code .
 The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
