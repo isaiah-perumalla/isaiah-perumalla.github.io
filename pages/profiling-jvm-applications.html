@@ -40,17 +40,61 @@
     
 
     <h1>Notes on JVM application Profiling</h1>
-<p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. </p>
+<p>Profilers in are a great tool in a developers toolbox, which is often underused, profiling not only helps us uncover bottlenecks in our software but also helps us gain an indepth understand the execution of application code. 
+Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. </p>
+<p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a>
+2) <a href="#measure-dont-guess">case for measuring JVM applications</a>
+3) <a href="">Execution Profiling experiment using common tools</a> </p>
+<h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
+<p>In this section we describe how the JVM actually executes code, this should provide motivation for why it is even more important to measure and identify hotspots in your application code .
+The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
+JVM applications have far more complex system, we dont know the exact code executed on the cpu until runtime. A level overview of how JVM executes code is  as outlined below</p>
+<p><img alt="code execution on JVM" src="/imgs/jvm-execution.PNG"></p>
+<h3>Compiler</h3>
+<p>Java source code is compiled into <strong>java bytecode</strong> which is a machine independent intermediate representation. In particular the <code>javac</code> compiler simply transforms java source code to java Bytecode not doing any optimization at compile time.</p>
+<h3>Classloader</h3>
+<p>class files containing byte code are loaded through the class loader, the class loader mechanish does security checks and verify the byte code.</p>
+<h3>Byte code Interpreter</h3>
+<p>All code exectuion is first done through the byte code interpreter, once the .class files are loaded by class loader the method that are execution is store in reserved area of memory called the <strong>Method Cache</strong>, this contains verified byte code for each method.
+Interpreter is stack based machine which executes method by reading methods from the method cache and executing byte code one at a time. While the interpreter is executing code, background threads in JVM keep track and gather statistics on which methods/parts of method are executed and how frequenty</p>
+<h3>Dynamic runtime compilation</h3>
+<p>-- picture of jdk examining code
+While the interpreter is executing code, background threads in JVM observe and gather statistics (invocation counts) on which methods and what parts of the method bytecode from the <strong>Method Cache</strong> are most commonly run.
+Using the data collected during the execution of bytecode interpreter, most commonly run methods are used as candidate for optimization and compilation to machine code.
+once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong> .</p>
+<h4>JIT Optimizations</h4>
+<p><strong>Speculative optimzation</strong> - JIT can make aggresive optimization by making 'educated guesses' based on runtime information for example virtual method dispatches can be removed and turned into static method call if at runtime only a single class in a heirrachy is exected. A virtual method probably won't be overridden. As it only exists only in one version, it can always be called with a fixed destination address like a static method.</p>
+<p>In order to avoid regenerating code, we can never achieve anything near the performance of a static compiler. However, if very frequent events are assumed to be rare, we will instead have to pay the penalty in increased code generation time for reoptimizations or invalidations
+The JIT may also perform the reverse operation on a method, that is machine code is removed from the <strong>Code Cache</strong> and reverted back to its bytecode. This is because JIT compiler can make assumptions when generating native code. We this assumptions are no longer true, a new subclass is loaded some later point, this means generated machine code for a particular method invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
+<p>-- picture of circle with deoptimzation</p>
+<h4>Pratical guidelines</h4>
+<ul>
+<li>once a hot method has been identified use <code>-XX:+PrintCompilation</code> jvm flag to verify the method was JIT compiled</li>
+<li>Refactor code have smaller methods (large methods wont be JIT compiled)</li>
+<li>write clean idiomatic java code</li>
+<li>Avoid exceptions for control flow, use only in exceptional circumstances</li>
+<li>Allow JVM to warm up after restarts, </li>
+</ul>
+<h2><a name="measure-dont-guess"> Measure dont guess </a></h2>
+<p>As we can see the number of transformations our code goes through during runtime, it does really obsure the code that is written and the actual code that is executed on the machine.
+No what it does .
+JVM is does a good job detecting patterns in a very large software at runtime and applies optimization dynamically, this means the code that will write <strong>will</strong> very different to the <strong>machine code</strong> that is run on the cpu, meaning any <em>micro</em> optimizations we perform as a developer may have no affect or even a negative effect at all on the runtime performance. For example optimizing a method which is never going to be JIT compiled is wasted effort, identifying <strong>hot code</strong> should always be the first step. </p>
 <blockquote>
-<p>"A good programmer will be wise to look carefully at the critcal coe; but <strong>only after</strong>" that code has been <strong>indentified</strong> " -- D Knuth
-"</p>
+<p><strong>Does that mean we should never care about performance ? </strong></p>
 </blockquote>
-<p>Profilers also helps uncover bugs early as it could uncover execution of code which maybe should never be executed in a certian context. </p>
-<blockquote></blockquote>
+<p>No not at all but what it means is we should foucs on our efforts on doing <strong>micro optimization</strong> we should focus writing <strong>JIT friendly</strong> code so the JVM can do it optimization better. 
+The other area to focus on is areas where an JVM can't help, these are optimization at the domain level for example<br>
+<em> replace a linear search with an efficient log n algorithm
+</em> how our application make use of OS resources such as threads
+* implement caching if needed</p>
+<p>To identify areas of bottlenecks it is important to collect data and measure the performance of a running application. Profilers are one tool every developer should use before attempting to make any performance improvements.
+Following quote from Knuth sums it up nicely</p>
+<blockquote>
+<p><strong>"Programmers waste enormous amounts of time thinking about, or worrying about, the speed of noncritical parts of their programs, and these attempts at efficiency actually have a strong negative impact when debugging and maintenance are considered. We should forget about small efficiencies, say about 97% of the time: premature optimization is the root of all evil.Yet we should not pass up our opportunities in that critical 3%. A good programmer will not be lulled into complacency by such reasoning, he will be wise to look carefully at the critical code; but only after that code has been identified. It is often a mistake to make a priori judgments about what parts of a program are really critical, since the universal experience of programmers who have been using measurement tools has been that their intuitive guesses fail."</strong></p>
+</blockquote>
+<p><strong>--Donald Knuth</strong></p>
 <p>Without a profiler it is almost impossible to identify critical code in large software, however developers need to be aware of when profiling applications running on the JVM as we shall see profilers can produce incorrect data which can mislead developers into optimizing a <strong>cold</strong> method and produce no performance improvement in applciation.</p>
 <p>This post is about execution profiling, some of my notes on how profiling tools (sampling profilers in particular) work on the JVM and limitation of common tools in particular we cover the follwoing Why profiling on JVM is hard !</p>
-<h2>JVM code execution in a nutshell</h2>
-<h2></h2>
 <h2>Execution Profiling experiment</h2>
 <p>As we shall see it is very easy to be misled by the output of the profilers, we use a sample program with <strong>known</strong> performance bottlenecks to help us uncover systematic errors outputted by profiler . </p>
 <h3>Sample program</h3>
@@ -58,47 +102,47 @@
 In this sample program we will insert <strong>cpu bound</strong> work which is run on the eventloop thread to see how well profilers help us identify this. (dont really need to know anything about netty to follow this)</p>
 <p>The highlighted lines below show where most of the cpu intesive work is.</p>
 <div class="codehilite"><pre><span></span><span class="kd">private</span> <span class="kt">float</span> <span class="nf">computeRandRate</span><span class="o">(</span><span class="kt">int</span> <span class="n">limit</span><span class="o">)</span> <span class="o">{</span>
-        <span class="kt">long</span> <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
-        <span class="k">try</span> <span class="o">{</span>
-            <span class="n">value</span> <span class="o">=</span> <span class="n">hogCPUCycles</span><span class="o">(</span><span class="n">limit</span><span class="o">);</span>
-        <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
-            <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
-        <span class="o">}</span>
-        <span class="n">Random</span> <span class="n">rand</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">(</span><span class="n">value</span><span class="o">);</span>
-        <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">rand</span><span class="o">.</span><span class="na">nextFloat</span><span class="o">();</span>
+    <span class="kt">long</span> <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+    <span class="k">try</span> <span class="o">{</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">hogCPUCycles</span><span class="o">(</span><span class="n">limit</span><span class="o">);</span>
+    <span class="o">}</span> <span class="k">catch</span> <span class="o">(</span><span class="n">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+        <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
     <span class="o">}</span>
+    <span class="n">Random</span> <span class="n">rand</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">(</span><span class="n">value</span><span class="o">);</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">rand</span><span class="o">.</span><span class="na">nextFloat</span><span class="o">();</span>
+<span class="o">}</span>
 <span class="hll">
-</span>    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">long</span> <span class="nf">hogCPUCycles</span><span class="o">(</span><span class="kt">int</span> <span class="n">limit</span><span class="o">)</span> <span class="o">{</span>
-        <span class="kt">long</span> <span class="n">sum</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
-<span class="hll">        <span class="n">Random</span> <span class="n">rand</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">();</span>
-</span><span class="hll">        <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-</span><span class="hll">            <span class="kt">int</span> <span class="n">randIndex</span> <span class="o">=</span> <span class="n">Math</span><span class="o">.</span><span class="na">abs</span><span class="o">(</span><span class="n">rand</span><span class="o">.</span><span class="na">nextInt</span><span class="o">()</span> <span class="o">%</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">);</span>
-</span><span class="hll">            <span class="kt">int</span> <span class="n">v</span> <span class="o">=</span> <span class="n">values</span><span class="o">[</span><span class="n">randIndex</span><span class="o">];</span>
-</span><span class="hll">            <span class="n">sum</span> <span class="o">+=</span> <span class="n">v</span><span class="o">;</span>
-</span>        <span class="o">}</span>
-        <span class="k">return</span> <span class="n">sum</span><span class="o">;</span>
-    <span class="o">}</span>
+</span><span class="kd">private</span> <span class="kd">static</span> <span class="kt">long</span> <span class="nf">hogCPUCycles</span><span class="o">(</span><span class="kt">int</span> <span class="n">limit</span><span class="o">)</span> <span class="o">{</span>
+    <span class="kt">long</span> <span class="n">sum</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span>
+<span class="hll">    <span class="n">Random</span> <span class="n">rand</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">();</span>
+</span><span class="hll">    <span class="k">for</span><span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
+</span><span class="hll">        <span class="kt">int</span> <span class="n">randIndex</span> <span class="o">=</span> <span class="n">Math</span><span class="o">.</span><span class="na">abs</span><span class="o">(</span><span class="n">rand</span><span class="o">.</span><span class="na">nextInt</span><span class="o">()</span> <span class="o">%</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">);</span>
+</span><span class="hll">        <span class="kt">int</span> <span class="n">v</span> <span class="o">=</span> <span class="n">values</span><span class="o">[</span><span class="n">randIndex</span><span class="o">];</span>
+</span><span class="hll">        <span class="n">sum</span> <span class="o">+=</span> <span class="n">v</span><span class="o">;</span>
+</span>    <span class="o">}</span>
+    <span class="k">return</span> <span class="n">sum</span><span class="o">;</span>
+<span class="o">}</span>
 
 <span class="nd">@Override</span>
-    <span class="kd">public</span> <span class="kt">void</span> <span class="nf">channelActive</span><span class="o">(</span><span class="n">ChannelHandlerContext</span> <span class="n">ctx</span><span class="o">)</span> <span class="o">{</span>
-        <span class="n">Channel</span> <span class="n">channel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="na">channel</span><span class="o">();</span>
-        <span class="n">logInfo</span><span class="o">(</span><span class="s">&quot;connected to: &quot;</span>  <span class="o">+</span> <span class="n">channel</span><span class="o">.</span><span class="na">remoteAddress</span><span class="o">(),</span> <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">);</span>
-        <span class="n">schedule</span> <span class="o">=</span> <span class="n">channel</span><span class="o">.</span><span class="na">eventLoop</span><span class="o">().</span><span class="na">scheduleAtFixedRate</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
-            <span class="k">try</span> <span class="o">{</span>
-                <span class="kt">float</span> <span class="n">rate</span> <span class="o">=</span> <span class="n">computeRandRate</span><span class="o">(</span><span class="mi">4</span> <span class="o">*</span> <span class="mi">1000_000</span><span class="o">);</span>
-                <span class="n">String</span> <span class="n">s</span> <span class="o">=</span> <span class="n">Float</span><span class="o">.</span><span class="na">toString</span><span class="o">(</span><span class="n">rate</span><span class="o">);</span>
-                <span class="n">ByteBuf</span> <span class="n">rateBytes</span> <span class="o">=</span> <span class="n">Unpooled</span><span class="o">.</span><span class="na">copiedBuffer</span><span class="o">(</span><span class="n">s</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="n">StandardCharsets</span><span class="o">.</span><span class="na">US_ASCII</span><span class="o">));</span>
-                <span class="n">channel</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">GBPUSD</span><span class="o">);</span>
-                <span class="n">channel</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">rateBytes</span><span class="o">);</span>
-                <span class="n">channel</span><span class="o">.</span><span class="na">writeAndFlush</span><span class="o">(</span><span class="n">CR_LF</span><span class="o">);</span>
-                <span class="n">logInfo</span><span class="o">(</span><span class="n">s</span><span class="o">,</span> <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">);</span>
-            <span class="o">}</span>
-            <span class="k">catch</span> <span class="o">(</span><span class="n">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
-                <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
-            <span class="o">}</span>
-        <span class="o">},</span> <span class="mi">0</span><span class="o">,</span> <span class="mi">500</span><span class="o">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">);</span>
+<span class="kd">public</span> <span class="kt">void</span> <span class="nf">channelActive</span><span class="o">(</span><span class="n">ChannelHandlerContext</span> <span class="n">ctx</span><span class="o">)</span> <span class="o">{</span>
+    <span class="n">Channel</span> <span class="n">channel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="na">channel</span><span class="o">();</span>
+    <span class="n">logInfo</span><span class="o">(</span><span class="s">&quot;connected to: &quot;</span>  <span class="o">+</span> <span class="n">channel</span><span class="o">.</span><span class="na">remoteAddress</span><span class="o">(),</span> <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">);</span>
+    <span class="n">schedule</span> <span class="o">=</span> <span class="n">channel</span><span class="o">.</span><span class="na">eventLoop</span><span class="o">().</span><span class="na">scheduleAtFixedRate</span><span class="o">(()</span> <span class="o">-&gt;</span> <span class="o">{</span>
+        <span class="k">try</span> <span class="o">{</span>
+            <span class="kt">float</span> <span class="n">rate</span> <span class="o">=</span> <span class="n">computeRandRate</span><span class="o">(</span><span class="mi">4</span> <span class="o">*</span> <span class="mi">1000_000</span><span class="o">);</span>
+            <span class="n">String</span> <span class="n">s</span> <span class="o">=</span> <span class="n">Float</span><span class="o">.</span><span class="na">toString</span><span class="o">(</span><span class="n">rate</span><span class="o">);</span>
+            <span class="n">ByteBuf</span> <span class="n">rateBytes</span> <span class="o">=</span> <span class="n">Unpooled</span><span class="o">.</span><span class="na">copiedBuffer</span><span class="o">(</span><span class="n">s</span><span class="o">.</span><span class="na">getBytes</span><span class="o">(</span><span class="n">StandardCharsets</span><span class="o">.</span><span class="na">US_ASCII</span><span class="o">));</span>
+            <span class="n">channel</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">GBPUSD</span><span class="o">);</span>
+            <span class="n">channel</span><span class="o">.</span><span class="na">write</span><span class="o">(</span><span class="n">rateBytes</span><span class="o">);</span>
+            <span class="n">channel</span><span class="o">.</span><span class="na">writeAndFlush</span><span class="o">(</span><span class="n">CR_LF</span><span class="o">);</span>
+            <span class="n">logInfo</span><span class="o">(</span><span class="n">s</span><span class="o">,</span> <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">);</span>
+        <span class="o">}</span>
+        <span class="k">catch</span> <span class="o">(</span><span class="n">Exception</span> <span class="n">e</span><span class="o">)</span> <span class="o">{</span>
+            <span class="n">e</span><span class="o">.</span><span class="na">printStackTrace</span><span class="o">();</span>
+        <span class="o">}</span>
+    <span class="o">},</span> <span class="mi">0</span><span class="o">,</span> <span class="mi">500</span><span class="o">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">MILLISECONDS</span><span class="o">);</span>
 
-    <span class="o">}</span>
+<span class="o">}</span>    
 </pre></div>
 
 
