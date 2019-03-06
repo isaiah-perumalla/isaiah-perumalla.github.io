@@ -39,16 +39,17 @@
     <h1>Dynamic Compilation of JVM</h1>
     
 
-    <p>Understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications.</p>
+    <p>Understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications. Having a mental model of how code execution can help us make informed decision. Micro benchmarking is hard to get right in general, but it is even harder to get right on JVM due the adpative nature of the compiler.</p>
 <p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a></p>
-<p>2) <a href="#measure-dont-guess">case for measuring JVM applications</a></p>
+<p>3) <a href="">Perils of microbenchmarking</a>
+2) <a href="#measure-dont-guess">case for measuring JVM applications</a></p>
 <h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
 <blockquote>
 <p>How does the JVM actually executes byte code ?</p>
 </blockquote>
 <p>This should provide motivation for why it is even more important to measure and identify hotspots in your application code .
 The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
-JVM on the other hand is very <strong>adaptive system</strong>, code compilation and optimization are performed at runtime and highly dependend on work load of the applicaion. we dont know the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
+JVM on the other hand is very <strong>adaptive system</strong>, code compilation and optimization are performed at runtime <strong>continously</strong> and highly dependend on work-load of the applicaion. we dont know the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
 <p><img alt="code execution on JVM" src="/imgs/jvm-execution.PNG"></p>
 <h3>Compiler</h3>
 <p>Java source code is compiled into <strong>java bytecode</strong> which is a machine independent intermediate representation. In particular the <code>javac</code> compiler simply transforms java source code to java Bytecode not doing any optimization at compile time.</p>
@@ -63,11 +64,11 @@ While the interpreter is executing code, background threads in JVM observe and g
 Using the data collected during the execution of bytecode interpreter, most commonly run methods are used as candidate for optimization and compilation to machine code.
 once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong> .</p>
 <h4>JIT Optimizations</h4>
-<p><strong>Speculative optimzation</strong> - JIT can make aggresive optimization by making 'educated guesses' based on runtime information for example virtual method dispatches can be removed and turned into static method call if at runtime only a single class in a heirrachy is exected. A virtual method probably won't be overridden. As it only exists only in one version, it can always be called with a fixed destination address like a static method.</p>
-<p>In order to avoid regenerating code, we can never achieve anything near the performance of a static compiler. However, if very frequent events are assumed to be rare, we will instead have to pay the penalty in increased code generation time for reoptimizations or invalidations
-The JIT may also perform the reverse operation on a method, that is machine code is removed from the <strong>Code Cache</strong> and reverted back to its bytecode. This is because JIT compiler can make assumptions when generating native code. We this assumptions are no longer true, a new subclass is loaded some later point, this means generated machine code for a particular method invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
-<p>-- picture of circle with deoptimzation</p>
-<h4>Deoptimization example</h4>
+<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to deoptimize (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. 
+-- picture of circle with deoptimzation</p>
+<p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and reverted back to its bytecode, this means generated machine code for a particular method invalidated by changes to the running program must be thrown away and potentially regenerated.
+-- picture of non entrant</p>
+<h4>JIT compiler in action</h4>
 <div class="codehilite"><pre><span></span><span class="kn">package</span> <span class="nn">net.isaiahp</span><span class="o">;</span>
 
 <span class="kn">import</span> <span class="nn">java.util.Random</span><span class="o">;</span>
@@ -137,7 +138,7 @@ The JIT may also perform the reverse operation on a method, that is machine code
 <h4>Pratical guidelines</h4>
 <ul>
 <li>once a hot method has been identified use <code>-XX:+PrintCompilation</code> jvm flag to verify the method was JIT compiled</li>
-<li>Refactor code have smaller methods (large methods wont be JIT compiled)</li>
+<li>Refactor code have smaller methods (large methods wont be JIT compiled), use JarScan to identify large method in third party jars</li>
 <li>write clean idiomatic java code</li>
 <li>Avoid exceptions for control flow, use only in exceptional circumstances</li>
 <li>Allow JVM to warm up after restarts, </li>
