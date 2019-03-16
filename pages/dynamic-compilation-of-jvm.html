@@ -39,10 +39,11 @@
     <h1>Dynamic Compilation of JVM</h1>
     
 
-    <p>Understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications. Having a mental model of how code execution can help us make informed decision. Micro benchmarking is hard to get right in general, but it is even harder to get right on JVM due the adpative nature of the compiler.</p>
-<p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a></p>
-<p>3) <a href="">Perils of microbenchmarking</a>
-2) <a href="#measure-dont-guess">case for measuring JVM applications</a></p>
+    <p>One of the most crucial parts of the Java Virtual Machine is the Just-In-Time (JIT) compiler; understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications by writing <strong>JIT friendly</strong> applications. Having a mental model of how code execution can help us make informed decision. 
+The other key point Micro benchmarking is hard to get right in general, but it is even harder to get right on JVM due the adpative nature of the compiler.</p>
+<p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a>
+2) <a href="">Perils of microbenchmarking</a>
+3) <a href="#measure-dont-guess">case for measuring JVM applications</a></p>
 <h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
 <blockquote>
 <p>How does the JVM actually executes byte code ?</p>
@@ -52,23 +53,28 @@ The runtime execution of Java code is far more complex than native C/C++ applica
 JVM on the other hand is very <strong>adaptive system</strong>, code compilation and optimization are performed at runtime <strong>continously</strong> and highly dependend on work-load of the applicaion. we dont know the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
 <p><img alt="code execution on JVM" src="/imgs/jvm-execution.PNG"></p>
 <h3>Compiler</h3>
-<p>Java source code is compiled into <strong>java bytecode</strong> which is a machine independent intermediate representation. In particular the <code>javac</code> compiler simply transforms java source code to java Bytecode not doing any optimization at compile time.</p>
+<p>Java source code is compiled into <strong>java bytecode</strong>, but this isnt machine code which a cpu can execute, it is simply a machine independent intermediate representation. In particular the <code>javac</code> compiler simply transforms java source code to java Bytecode doing minmal, elementary optimization at compile time.</p>
 <h3>Classloader</h3>
-<p>class files containing byte code are loaded through the class loader, the class loader mechanish does security checks and verify the byte code.</p>
-<h3>Byte code Interpreter</h3>
+<p>class files containing byte code are loaded through the class loader, the class loader mechanism does security checks and verifies the byte code before it is executed.</p>
+<h3>Byte Code Interpreter</h3>
 <p>All code exectuion is first done through the byte code interpreter, once the .class files are loaded by class loader the method that are execution is store in reserved area of memory called the <strong>Method Cache</strong>, this contains verified byte code for each method.
-Interpreter is stack based machine which executes method by reading methods from the method cache and executing byte code one at a time. While the interpreter is executing code, background threads in JVM keep track and gather statistics on which methods/parts of method are executed and how frequenty</p>
-<h3>Dynamic runtime compilation</h3>
+Interpreter is stack based machine which executes method by reading methods from the method cache and executing byte code one at a time. While the interpreter is executing code, background threads in JVM keep track and gather statistics on which methods/parts of method are executed and how frequently</p>
+<h3>Dynamic Runtime Compilation</h3>
 <p>-- picture of jdk examining code
 While the interpreter is executing code, background threads in JVM observe and gather statistics (invocation counts) on which methods and what parts of the method bytecode from the <strong>Method Cache</strong> are most commonly run.
 Using the data collected during the execution of bytecode interpreter, most commonly run methods are used as candidate for optimization and compilation to machine code.
-once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong> .</p>
+once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Only machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the cpu. </p>
 <h4>JIT Optimizations</h4>
-<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to deoptimize (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. 
+<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to <strong>deoptimize</strong> (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. 
 -- picture of circle with deoptimzation</p>
-<p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and reverted back to its bytecode, this means generated machine code for a particular method invalidated by changes to the running program must be thrown away and potentially regenerated.
--- picture of non entrant</p>
-<h4>JIT compiler in action</h4>
+<p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> the at runtime there at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and execution reverts back to running bytecode through the interpreter until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
+<p>-- picture of non entrant</p>
+<h5>Tiered Compilation</h5>
+<p>The current openJDK implementations have two JIT compilers, the <strong>client compiler</strong> (C1) which can produce machine code quickly however not with aggresive optimization. The other compiler known as <strong>server compiler</strong> or C2 take a bit longer to produce machine code but can generate highgly optimized machine code. Previously C1 compiler was used for desktop applications and C2 for server applications, from JDK 8 onwards the default behaviour is to combine both the C1 and C2 compilers. Initially bytecode for a method is compiled with C1 and if the method is still identified as a hotspot and there is enough data collected by JVM to indicate a C2 compilation is worth while, the method is compiled a second time with further optimisations.
+This is usually reffered to at <strong>Tiered Compilation</strong> and is turn on by default of all JVM version 8 onwards. <code>-XX:+/-TieredCompilation</code> can be used to enbable disable this feature. </p>
+<h4>JIT Compiler(s) in Action</h4>
+<p>To demonstrate the fact that java does not just run is one way and see the JIT compiler in action. We execute a simple program shown below; in this program we initialise and int array of 1 million random integers, we provide two implemenation of <code>java.util.function.IntPredicate</code> <code>class IsEven</code> and <code>class IsOdd</code> as the name suggest one implemention test to see if an int is odd and other other tests to see if the int is even.
+We iterate through the array and execute the predicate and measure the execution time, we repeate this a 100 times observe how the execution times vary and how the perfomance changes as the application continues to run. We do this process once using the <code>IsOdd</code> predicate and then using <code>IsEven</code> predicate.</p>
 <div class="codehilite"><pre><span></span><span class="kn">package</span> <span class="nn">net.isaiahp</span><span class="o">;</span>
 
 <span class="kn">import</span> <span class="nn">java.util.Random</span><span class="o">;</span>
@@ -76,60 +82,58 @@ once a <strong>hot method</strong> has been indetified by the optimizer, the met
 
 <span class="kd">public</span> <span class="kd">class</span> <span class="nc">Main</span> <span class="o">{</span>
 
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span><span class="o">[]</span> <span class="n">values</span><span class="o">;</span>
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">IsMultipleOf4</span> <span class="kd">implements</span> <span class="n">IntPredicate</span> <span class="o">{</span>
-        <span class="nd">@Override</span>
-        <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">test</span><span class="o">(</span><span class="kt">int</span> <span class="n">value</span><span class="o">)</span> <span class="o">{</span>
-            <span class="k">return</span> <span class="o">(</span><span class="n">value</span> <span class="o">%</span> <span class="mi">4</span><span class="o">)</span> <span class="o">==</span> <span class="mi">0</span><span class="o">;</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">MAX_SIZE</span> <span class="o">=</span> <span class="mi">1000_000</span><span class="o">;</span>
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">IsOddPredicate</span> <span class="kd">implements</span> <span class="n">IntPredicate</span>  <span class="o">{</span>
-        <span class="nd">@Override</span>
-        <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">test</span><span class="o">(</span><span class="kt">int</span> <span class="n">value</span><span class="o">)</span> <span class="o">{</span>
-            <span class="k">return</span> <span class="o">(</span><span class="n">value</span> <span class="o">%</span> <span class="mi">2</span><span class="o">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="o">;</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
-
-
-    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+    <span class="kd">static</span> <span class="o">{</span>
 
         <span class="n">Random</span> <span class="n">random</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">();</span>
-        <span class="kt">int</span><span class="o">[]</span> <span class="n">values</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span><span class="o">[</span><span class="mi">1000_0</span><span class="o">];</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span><span class="o">[</span><span class="n">MAX_SIZE</span><span class="o">];</span>
         <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
             <span class="n">values</span><span class="o">[</span><span class="n">i</span><span class="o">]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="na">nextInt</span><span class="o">();</span>
         <span class="o">}</span>
-        <span class="kt">int</span> <span class="n">ITERS</span> <span class="o">=</span> <span class="mi">200</span><span class="o">;</span>
-        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">ITERS</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-
-            <span class="kt">long</span> <span class="n">time</span> <span class="o">=</span> <span class="n">runOperation</span><span class="o">(</span><span class="n">values</span><span class="o">,</span> <span class="k">new</span> <span class="n">IsMultipleOf4</span><span class="o">());</span>
-            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;#&quot;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">time</span><span class="o">);</span>
-        <span class="o">}</span>
-
-        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">200</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="o">(</span><span class="mi">200</span> <span class="o">+</span> <span class="n">ITERS</span><span class="o">);</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-
-            <span class="n">IntPredicate</span> <span class="n">predicate</span> <span class="o">=</span> <span class="n">getPredicate</span><span class="o">(</span><span class="n">i</span><span class="o">);</span>
-            <span class="kt">long</span> <span class="n">time</span> <span class="o">=</span> <span class="n">runOperation</span><span class="o">(</span><span class="n">values</span><span class="o">,</span> <span class="n">predicate</span><span class="o">);</span>
-            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;\n#&quot;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">time</span><span class="o">);</span>
-        <span class="o">}</span>
 
     <span class="o">}</span>
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="n">IntPredicate</span> <span class="nf">getPredicate</span><span class="o">(</span><span class="kt">int</span> <span class="n">seed</span><span class="o">)</span> <span class="o">{</span>
-        <span class="k">if</span> <span class="o">(</span><span class="n">seed</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="o">)</span> <span class="k">return</span> <span class="k">new</span> <span class="n">IsMultipleOf4</span><span class="o">();</span>
-        <span class="k">else</span> <span class="k">return</span> <span class="k">new</span> <span class="n">IsOddPredicate</span><span class="o">();</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">IsEven</span> <span class="kd">implements</span> <span class="n">IntPredicate</span> <span class="o">{</span>
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">test</span><span class="o">(</span><span class="kt">int</span> <span class="n">value</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="o">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x1</span><span class="o">)</span> <span class="o">==</span> <span class="mi">0</span><span class="o">;</span>
+        <span class="o">}</span>
     <span class="o">}</span>
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">long</span> <span class="nf">runOperation</span><span class="o">(</span><span class="kt">int</span><span class="o">[]</span> <span class="n">values</span><span class="o">,</span> <span class="n">IntPredicate</span> <span class="n">predicate</span><span class="o">)</span> <span class="o">{</span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">IsOdd</span> <span class="kd">implements</span> <span class="n">IntPredicate</span>  <span class="o">{</span>
+        <span class="nd">@Override</span>
+        <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">test</span><span class="o">(</span><span class="kt">int</span> <span class="n">value</span><span class="o">)</span> <span class="o">{</span>
+            <span class="k">return</span> <span class="o">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x1</span><span class="o">)</span> <span class="o">==</span> <span class="mi">1</span><span class="o">;</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
 
+    <span class="c1">// iterate through array and apply the predicate on each int in the array</span>
+    <span class="c1">//return the time in nanos  </span>
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">long</span> <span class="nf">testValues</span><span class="o">(</span><span class="kt">int</span><span class="o">[]</span> <span class="n">values</span><span class="o">,</span> <span class="n">IntPredicate</span> <span class="n">predicate</span><span class="o">)</span> <span class="o">{</span>
         <span class="kt">long</span> <span class="n">start</span> <span class="o">=</span> <span class="n">System</span><span class="o">.</span><span class="na">nanoTime</span><span class="o">();</span>
         <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-
             <span class="kt">boolean</span> <span class="n">unused</span> <span class="o">=</span> <span class="n">predicate</span><span class="o">.</span><span class="na">test</span><span class="o">(</span><span class="n">values</span><span class="o">[</span><span class="n">i</span><span class="o">]);</span>
-
         <span class="o">}</span>
         <span class="kt">long</span> <span class="n">end</span> <span class="o">=</span> <span class="n">System</span><span class="o">.</span><span class="na">nanoTime</span><span class="o">();</span>
         <span class="k">return</span> <span class="o">(</span><span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="o">);</span>
+    <span class="o">}</span>
+
+    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">runIterations</span><span class="o">(</span><span class="kt">int</span> <span class="n">ITERS</span><span class="o">,</span> <span class="n">IntPredicate</span> <span class="n">predicate</span><span class="o">,</span> <span class="kt">int</span> <span class="n">start</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="n">start</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">ITERS</span><span class="o">;</span> <span class="n">i</span><span class="o">+=</span><span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
+            <span class="kt">long</span> <span class="n">time</span> <span class="o">=</span> <span class="n">testValues</span><span class="o">(</span><span class="n">values</span><span class="o">,</span> <span class="n">predicate</span><span class="o">);</span>
+            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;#&quot;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="s">&quot;, &quot;</span> <span class="o">+</span> <span class="n">time</span><span class="o">);</span>
+        <span class="o">}</span>
+    <span class="o">}</span>
+
+    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+
+        <span class="kd">final</span> <span class="kt">int</span> <span class="n">ITERS</span> <span class="o">=</span> <span class="mi">500</span><span class="o">;</span>
+        <span class="n">runIterations</span><span class="o">(</span><span class="n">ITERS</span><span class="o">,</span> <span class="k">new</span> <span class="n">IsOdd</span><span class="o">(),</span> <span class="mi">1</span><span class="o">);</span> 
+
+        <span class="n">runIterations</span><span class="o">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">ITERS</span><span class="o">,</span> <span class="k">new</span> <span class="n">IsEven</span><span class="o">(),</span> <span class="n">ITERS</span><span class="o">);</span>
     <span class="o">}</span>
 <span class="o">}</span>
 </pre></div>
@@ -141,7 +145,7 @@ once a <strong>hot method</strong> has been indetified by the optimizer, the met
 <li>Refactor code have smaller methods (large methods wont be JIT compiled), use JarScan to identify large method in third party jars</li>
 <li>write clean idiomatic java code</li>
 <li>Avoid exceptions for control flow, use only in exceptional circumstances</li>
-<li>Allow JVM to warm up after restarts, </li>
+<li>Allow JVM to warm up after restarts. </li>
 </ul>
 <h2><a name="measure-dont-guess"> Measure dont guess </a></h2>
 <p>As we can see the number of transformations our code goes through during runtime, it does really obsure the code that is written and the actual code that is executed on the machine.
