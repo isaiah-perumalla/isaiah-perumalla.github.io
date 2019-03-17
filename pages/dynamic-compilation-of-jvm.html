@@ -51,7 +51,7 @@ The other key point Micro benchmarking is hard to get right in general, but it i
 <p>This should provide motivation for why it is even more important to measure and identify hotspots in your application code .
 The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
 JVM on the other hand is very <strong>adaptive system</strong>, code compilation and optimization are performed at runtime <strong>continously</strong> and highly dependend on work-load of the applicaion. we dont know the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
-<p><img alt="code execution on JVM" src="/imgs/jvm-execution.PNG"></p>
+<p><img alt="code execution on JVM" src="/imgs/jvm-execution.svg"></p>
 <h3>Compiler</h3>
 <p>Java source code is compiled into <strong>java bytecode</strong>, but this isnt machine code which a cpu can execute, it is simply a machine independent intermediate representation. In particular the <code>javac</code> compiler simply transforms java source code to java Bytecode doing minmal, elementary optimization at compile time.</p>
 <h3>Classloader</h3>
@@ -66,7 +66,7 @@ Interpreter is stack based machine which executes method by reading methods from
 <p>Once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU. </p>
 <h4>JIT Optimizations</h4>
 <p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to <strong>deoptimize</strong> (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. 
-<img alt="jvm-execution-life-cycle" src="/imgs/jvm-life-cycle.png"></p>
+<img alt="jvm-execution-life-cycle" src="/imgs/jvm-life-cycle.svg"></p>
 <p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> the at runtime there at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and execution reverts back to running bytecode through the interpreter until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
 <p>-- picture of non entrant</p>
 <h5>Tiered Compilation</h5>
