@@ -41,9 +41,11 @@
 
     <p>One of the most crucial parts of the Java Virtual Machine is the Just-In-Time (JIT) compiler; understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications by writing <strong>JIT friendly</strong> applications. Having a mental model of how code execution can help us make informed decision. 
 The other key point Micro benchmarking is hard to get right in general, but it is even harder to get right on JVM due the adpative nature of the compiler.</p>
-<p>1) <a href="#jvm-exe">JVM code execution in a nutshell</a>
-2) <a href="">Perils of microbenchmarking</a>
-3) <a href="#measure-dont-guess">case for measuring JVM applications</a></p>
+<ol>
+<li><a href="#jvm-exe">JVM code execution in a nutshell</a></li>
+<li><a href="">Perils of microbenchmarking</a></li>
+<li><a href="#measure-dont-guess">case for measuring JVM applications</a></li>
+</ol>
 <h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
 <blockquote>
 <p>How does the JVM actually executes byte code ?</p>
@@ -51,28 +53,26 @@ The other key point Micro benchmarking is hard to get right in general, but it i
 <p>This should provide motivation for why it is even more important to measure and identify hotspots in your application code .
 The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
 JVM on the other hand is very <strong>adaptive system</strong>, code compilation and optimization are performed at runtime <strong>continously</strong> and highly dependend on work-load of the applicaion. we dont know the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
+<ol>
+<li>
+<p><em>Compiler</em>: Java source code is compiled into <strong>java bytecode</strong>, but this isnt machine code which a cpu can execute, it is simply a machine independent intermediate representation. </p>
+</li>
+<li>
+<p><em>Byte Code Interpreter</em>: All code exectuion is first done through the byte code interpreter, once the .class files are loaded by class loader the method that are execution is store in reserved area of memory called the <strong>Method Cache</strong>, this contains verified byte code for each method.</p>
+</li>
+</ol>
 <p><img alt="code execution on JVM" src="/imgs/jvm-execution.svg"></p>
-<h3>Compiler</h3>
-<p>Java source code is compiled into <strong>java bytecode</strong>, but this isnt machine code which a cpu can execute, it is simply a machine independent intermediate representation. In particular the <code>javac</code> compiler simply transforms java source code to java Bytecode doing minmal, elementary optimization at compile time.</p>
-<h3>Classloader</h3>
-<p>class files containing byte code are loaded through the class loader, the class loader mechanism does security checks and verifies the byte code before it is executed.</p>
-<h3>Byte Code Interpreter</h3>
-<p>All code exectuion is first done through the byte code interpreter, once the .class files are loaded by class loader the method that are execution is store in reserved area of memory called the <strong>Method Cache</strong>, this contains verified byte code for each method.
-Interpreter is stack based machine which executes method by reading methods from the method cache and executing byte code one at a time. While the interpreter is executing code, background threads in JVM keep track and gather statistics on which methods/parts of method are executed and how frequently</p>
-<h3>Dynamic Runtime Compilation</h3>
-<h4>Profile Guided Optimising Compiler</h4>
-<p>Initially all byte-code run in interpreter mode, while the interpreter is executing code, background threads in JVM observe and gather statistics (invocation counts) on which methods and what parts of the method bytecode from the <strong>Method Cache</strong> are most commonly run. The information that has been collected about the execution of the app is called a <strong>profile</strong>. The compiler can then use this *<em>profile</em> to perform optimizations, this technique is often reffered to as profile-guided optimization (PGO). 
-<img alt="profile guided optimization" src="/imgs/duke-checking.gif"></p>
-<p>Once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU. </p>
-<h4>JIT Optimizations</h4>
-<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to <strong>deoptimize</strong> (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. 
+<ol>
+<li>
+<p>while the interpreter is executing code, background threads in JVM observe and gather statistics (invocation counts) on which methods and what parts of the method bytecode from the <strong>Method Cache</strong> are most commonly run. The information that has been collected about the execution of the app is called a <strong>profile</strong>. The compiler can then use this *<em>profile</em> to perform optimizations, this technique is often reffered to as profile-guided optimization (PGO).</p>
+</li>
+<li>
+<p><em>Deoptimization</em>: One of the main advantages of a profiled guided optmizer is the ability to make <em>speculative optimzation</em>, this where the VM can make <em>educated guesses</em> and perform aggressive optimization but for this to work there is needs to be a fall back just in-case the assumption it made are no longer true, deoptimzation is fall back strategy where JIT compiled code is invalidated an execution falls back to interpreter.</p>
+</li>
+</ol>
+<p>The diagram below illustrates the code-execution lifecycle on modern JVMs.
 <img alt="jvm-execution-life-cycle" src="/imgs/jvm-life-cycle.svg"></p>
-<p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> the at runtime there at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and execution reverts back to running bytecode through the interpreter until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
-<p>-- picture of non entrant</p>
-<h5>Tiered Compilation</h5>
-<p>The current openJDK implementations have two JIT compilers, the <strong>client compiler</strong> (C1) which can produce machine code quickly however not with aggresive optimization. The other compiler known as <strong>server compiler</strong> or C2 take a bit longer to produce machine code but can generate highgly optimized machine code. Previously C1 compiler was used for desktop applications and C2 for server applications, from JDK 8 onwards the default behaviour is to combine both the C1 and C2 compilers. Initially bytecode for a method is compiled with C1 and if the method is still identified as a hotspot and there is enough data collected by JVM to indicate a C2 compilation is worth while, the method is compiled a second time with further optimisations.
-This is usually reffered to at <strong>Tiered Compilation</strong> and is turn on by default of all JVM version 8 onwards. <code>-XX:+/-TieredCompilation</code> can be used to enbable disable this feature. </p>
-<h4>JIT Compiler(s) in Action</h4>
+<h3>JIT Compiler(s) in Action</h3>
 <p>To demonstrate the fact that java does not just run is one way and see the JIT compiler in action. We execute a simple program shown below; in this program we initialise and int array of 1 million random integers, we provide two implemenation of <code>java.util.function.IntPredicate</code> <code>class IsEven</code> and <code>class IsOdd</code> as the name suggest one implemention test to see if an int is odd and other other tests to see if the int is even.
 We iterate through the array and execute the predicate and measure the execution time, we repeate this a 100 times observe how the execution times vary and how the perfomance changes as the application continues to run. We do this process once using the <code>IsOdd</code> predicate and then using <code>IsEven</code> predicate.</p>
 <div class="codehilite"><pre><span></span><span class="kn">package</span> <span class="nn">net.isaiahp</span><span class="o">;</span>
@@ -139,6 +139,18 @@ We iterate through the array and execute the predicate and measure the execution
 </pre></div>
 
 
+<h3>Dynamic Runtime Compilation</h3>
+<h4>Profile Guided Optimising Compiler</h4>
+<p>Initially all byte-code run in interpreter mode, 
+<img alt="profile guided optimization" src="/imgs/duke-checking.gif"></p>
+<p>Once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU. </p>
+<h4>JIT Optimizations</h4>
+<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to <strong>deoptimize</strong> (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. </p>
+<p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> the at runtime there at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and execution reverts back to running bytecode through the interpreter until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
+<p>-- picture of non entrant</p>
+<h5>Tiered Compilation</h5>
+<p>The current openJDK implementations have two JIT compilers, the <strong>client compiler</strong> (C1) which can produce machine code quickly however not with aggresive optimization. The other compiler known as <strong>server compiler</strong> or C2 take a bit longer to produce machine code but can generate highgly optimized machine code. Previously C1 compiler was used for desktop applications and C2 for server applications, from JDK 8 onwards the default behaviour is to combine both the C1 and C2 compilers. Initially bytecode for a method is compiled with C1 and if the method is still identified as a hotspot and there is enough data collected by JVM to indicate a C2 compilation is worth while, the method is compiled a second time with further optimisations.
+This is usually reffered to at <strong>Tiered Compilation</strong> and is turn on by default of all JVM version 8 onwards. <code>-XX:+/-TieredCompilation</code> can be used to enbable disable this feature. </p>
 <h4>Pratical guidelines</h4>
 <ul>
 <li>once a hot method has been identified use <code>-XX:+PrintCompilation</code> jvm flag to verify the method was JIT compiled</li>
