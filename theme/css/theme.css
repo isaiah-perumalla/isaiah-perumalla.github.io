@@ -230,19 +230,19 @@ article p {
   margin: 1ex 0;
 }
 
-article code {
+article {
   font-family: "Terminus", "Inconsolata", "Monaco", "Lucida Typewriter", monospace;
   overflow-x: auto;  
 }
 
-article pre {
+article  {
   border: 1px solid #ddd;
   box-shadow: 5px 5px 5px #eee;
   padding: 1em;
   overflow-x: auto;
 }
 
-article pre code {
+article {
   font-family: "Terminus", "Inconsolata", "Monaco", "Lucida Typewriter", monospace;
 }
 

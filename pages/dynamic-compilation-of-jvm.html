@@ -6,12 +6,14 @@
         <meta name=viewport content="width=device-width, initial-scale=1">
         <meta name=”description” content=”isaiah perumalla tech blog, Alogrithms, Java, Java performance, profiling, linux, Python, Linux”>
         <link href="/theme/css/theme.css" rel="stylesheet">
-        <link href="/theme/css/code_styles.css" rel="stylesheet">
+        <link href="/theme/css/solarized-dark.css" rel="stylesheet">
         <link href="/theme/css/custom.css" rel="stylesheet">
         <link href="/theme/css/sanitize.css" rel="stylesheet">
 
         <!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=UA-134619110-1"></script>
+<script src="/theme/js/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
@@ -39,7 +41,7 @@
     <h1>Dynamic Compilation of JVM</h1>
     
 
-    <p>One of the most crucial parts of the Java Virtual Machine is the Just-In-Time (JIT) compiler; understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications by writing <strong>JIT friendly</strong> applications. Having a mental model of how code execution can help us make informed decision. 
+    <p>One of the most crucial parts of the Java Virtual Machine is the Just-In-Time (JIT) compiler; understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications by writing <em>JIT friendly</em> applications. Having a mental model of how code execution can help us make informed decision. 
 The other key point Micro benchmarking is hard to get right in general, but it is even harder to get right on JVM due the adpative nature of the compiler.</p>
 <ol>
 <li><a href="#jvm-exe">JVM code execution in a nutshell</a></li>
@@ -48,102 +50,113 @@ The other key point Micro benchmarking is hard to get right in general, but it i
 </ol>
 <h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
 <blockquote>
-<p>How does the JVM actually executes byte code ?</p>
+<p>How does the JVM actually executes code ?</p>
 </blockquote>
 <p>This should provide motivation for why it is even more important to measure and identify hotspots in your application code .
 The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
-JVM on the other hand is very <strong>adaptive system</strong>, code compilation and optimization are performed at runtime <strong>continously</strong> and highly dependend on work-load of the applicaion. we dont know the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
+JVM on the other hand does not do this for several key reasons</p>
+<ul>
+<li>One the main selling point of Java is platform independence, this allivates the need for programmers to recompile application for different CPU architecutres (x86, ARM, Sparc) or Operating systems (Linux/Windows), instead moves the portability problem to JVM). JVM application are compiled into platform independent byte-code (store in <em>.class files</em>)</li>
+<li>JVM allows runtime modifications to code, which mean it cannot rely just on static compilation</li>
+</ul>
+<p>Given the contraints above JVM makes a completely different set of tradeoffs, to enable a very <em>adaptive system</em>. Code compilation and optimization are performed at runtime, <em>continously</em> and highly dependend on work-load of the applicaion. 
+So Unlike a statically compiled language like C/C++, We <em>dont know</em> the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
 <ol>
 <li>
-<p><em>Compiler</em>: Java source code is compiled into <strong>java bytecode</strong>, but this isnt machine code which a cpu can execute, it is simply a machine independent intermediate representation. </p>
+<p><em>Compiler</em>: <em>javac</em> compiles Java source code <em>Java Bytecode</em>, but this isn't machine code which a cpu can execute, it is simply a machine independent intermediate representation. Its the JVM responsibilty to turn byte code into native code for the cpu to execute. This is can be done in two ways</p>
+<ul>
+<li>JVM can interpret and emulate each byte code instruction, this approach is simple to implement but suffer from slower execution as native code can be orders of magnitude faster </li>
+<li>The other option is JVM can compile each method to native code for the particulat platform and then run the machine code directly on the cpu, the trade off here is code generation at rutime is can be expensive and can add too much overhead especially for cold method. (ie if a method is only executed once, then any benefits in execution speed is outweighed by time to compile)
+As we shall see <em>most</em> JVMs use a combination of the of both the above approaches. </li>
+</ul>
 </li>
 <li>
-<p><em>Byte Code Interpreter</em>: All code exectuion is first done through the byte code interpreter, once the .class files are loaded by class loader the method that are execution is store in reserved area of memory called the <strong>Method Cache</strong>, this contains verified byte code for each method.</p>
-</li>
-</ol>
-<p><img alt="code execution on JVM" src="/imgs/jvm-execution.svg"></p>
-<ol>
-<li>
-<p>while the interpreter is executing code, background threads in JVM observe and gather statistics (invocation counts) on which methods and what parts of the method bytecode from the <strong>Method Cache</strong> are most commonly run. The information that has been collected about the execution of the app is called a <strong>profile</strong>. The compiler can then use this *<em>profile</em> to perform optimizations, this technique is often reffered to as profile-guided optimization (PGO).</p>
+<p><em>Byte Code Interpreter</em>: All code execution is first done through the byte code interpreter, once the .class files are loaded by class loader the method that is executed is stored in a reserved area of memory called the <em>Method Cache</em>, this contains verified byte code for each method. Only <em>hot methods</em> deemed worthy of compilation to navtive code are actually compiled. </p>
+<blockquote>
+<p>Early version of JVM execute code only in interpreted mode, you can still run an application in interpreted mode only by <code>-XX:+Int</code> jvm arg</p>
+</blockquote>
 </li>
 <li>
-<p><em>Deoptimization</em>: One of the main advantages of a profiled guided optmizer is the ability to make <em>speculative optimzation</em>, this where the VM can make <em>educated guesses</em> and perform aggressive optimization but for this to work there is needs to be a fall back just in-case the assumption it made are no longer true, deoptimzation is fall back strategy where JIT compiled code is invalidated an execution falls back to interpreter.</p>
+<p><em>Profiling</em>: One of the main function of JVM is to determine which methods to compile at runtime. To determine the <em>hotness</em> of a method, an invocation counter is associated with each method and each time the interpreter executes a method counter is increment. Background threads in JVM observe and gather statistics on which methods and what parts of the method bytecode from the <em>Method Cache</em> are most commonly run. The information that has been collected about the execution of the app is called a <em>profile</em>. The compiler can then use this <em>profile</em> to make some of its optimizations more effective, which can result in signigicant performace benefits, this technique is often reffered to as profile-guided optimization.</p>
+</li>
+<li>
+<p><em>Deoptimization</em>: One of the main advantages of a <em>Managed</em> profile guided optmizer is the ability to make <em>speculative optimzations</em>, this where the VM can make <em>educated guesses</em> and perform aggressive optimizations, however for this to work there is needs to be a for the JVM to correct its assumptions just in-case the assumptions are no longer true, deoptimzation is fall back strategy where JIT compiled code is invalidated and execution falls back to interpreter, until further data is collected before another compilation is done.</p>
 </li>
 </ol>
 <p>The diagram below illustrates the code-execution lifecycle on modern JVMs.
 <img alt="jvm-execution-life-cycle" src="/imgs/jvm-life-cycle.svg"></p>
 <h3>JIT Compiler(s) in Action</h3>
-<p>To demonstrate the fact that java does not just run is one way and see the JIT compiler in action. We execute a simple program shown below; in this program we initialise and int array of 1 million random integers, we provide two implemenation of <code>java.util.function.IntPredicate</code> <code>class IsEven</code> and <code>class IsOdd</code> as the name suggest one implemention test to see if an int is odd and other other tests to see if the int is even.
+<p>To demonstrate the fact that java does not just run is one way and see the JIT compiler in action. We execute a simple program shown below; in this program we initialise and int array of ten thousand random integers, we provide two implemenations of <code>java.util.function.IntPredicate</code> <code>class IsEven</code> and <code>class IsOdd</code> as the name suggest one implemention test to see if an int is odd and other other tests to see if the int is even.
 We iterate through the array and execute the predicate and measure the execution time, we repeate this a 100 times observe how the execution times vary and how the perfomance changes as the application continues to run. We do this process once using the <code>IsOdd</code> predicate and then using <code>IsEven</code> predicate.</p>
-<div class="codehilite"><pre><span></span><span class="kn">package</span> <span class="nn">net.isaiahp</span><span class="o">;</span>
+<pre><code>package net.isaiahp;
 
-<span class="kn">import</span> <span class="nn">java.util.Random</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">java.util.function.IntPredicate</span><span class="o">;</span>
+import java.util.Random;
+import java.util.function.IntPredicate;
 
-<span class="kd">public</span> <span class="kd">class</span> <span class="nc">Main</span> <span class="o">{</span>
+public class Main {
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span><span class="o">[]</span> <span class="n">values</span><span class="o">;</span>
+    private static final int[] values;
 
-    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">final</span> <span class="kt">int</span> <span class="n">MAX_SIZE</span> <span class="o">=</span> <span class="mi">1000_000</span><span class="o">;</span>
+    public static final int MAX_SIZE = 1000_000;
 
-    <span class="kd">static</span> <span class="o">{</span>
+    static {
 
-        <span class="n">Random</span> <span class="n">random</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Random</span><span class="o">();</span>
-        <span class="n">values</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">int</span><span class="o">[</span><span class="n">MAX_SIZE</span><span class="o">];</span>
-        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-            <span class="n">values</span><span class="o">[</span><span class="n">i</span><span class="o">]</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="na">nextInt</span><span class="o">();</span>
-        <span class="o">}</span>
+        Random random = new Random();
+        values = new int[MAX_SIZE];
+        for (int i = 0; i &lt; values.length; i++) {
+            values[i] = random.nextInt();
+        }
 
-    <span class="o">}</span>
+    }
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">IsEven</span> <span class="kd">implements</span> <span class="n">IntPredicate</span> <span class="o">{</span>
-        <span class="nd">@Override</span>
-        <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">test</span><span class="o">(</span><span class="kt">int</span> <span class="n">value</span><span class="o">)</span> <span class="o">{</span>
-            <span class="k">return</span> <span class="o">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x1</span><span class="o">)</span> <span class="o">==</span> <span class="mi">0</span><span class="o">;</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
+    private static class IsEven implements IntPredicate {
+        @Override
+        public boolean test(int value) {
+            return (value &amp; 0x1) == 0;
+        }
+    }
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">IsOdd</span> <span class="kd">implements</span> <span class="n">IntPredicate</span>  <span class="o">{</span>
-        <span class="nd">@Override</span>
-        <span class="kd">public</span> <span class="kt">boolean</span> <span class="nf">test</span><span class="o">(</span><span class="kt">int</span> <span class="n">value</span><span class="o">)</span> <span class="o">{</span>
-            <span class="k">return</span> <span class="o">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x1</span><span class="o">)</span> <span class="o">==</span> <span class="mi">1</span><span class="o">;</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
+    private static class IsOdd implements IntPredicate  {
+        @Override
+        public boolean test(int value) {
+            return (value &amp; 0x1) == 1;
+        }
+    }
 
-    <span class="c1">// iterate through array and apply the predicate on each int in the array</span>
-    <span class="c1">//return the time in nanos  </span>
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">long</span> <span class="nf">testValues</span><span class="o">(</span><span class="kt">int</span><span class="o">[]</span> <span class="n">values</span><span class="o">,</span> <span class="n">IntPredicate</span> <span class="n">predicate</span><span class="o">)</span> <span class="o">{</span>
-        <span class="kt">long</span> <span class="n">start</span> <span class="o">=</span> <span class="n">System</span><span class="o">.</span><span class="na">nanoTime</span><span class="o">();</span>
-        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">values</span><span class="o">.</span><span class="na">length</span><span class="o">;</span> <span class="n">i</span><span class="o">++)</span> <span class="o">{</span>
-            <span class="kt">boolean</span> <span class="n">unused</span> <span class="o">=</span> <span class="n">predicate</span><span class="o">.</span><span class="na">test</span><span class="o">(</span><span class="n">values</span><span class="o">[</span><span class="n">i</span><span class="o">]);</span>
-        <span class="o">}</span>
-        <span class="kt">long</span> <span class="n">end</span> <span class="o">=</span> <span class="n">System</span><span class="o">.</span><span class="na">nanoTime</span><span class="o">();</span>
-        <span class="k">return</span> <span class="o">(</span><span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="o">);</span>
-    <span class="o">}</span>
+    // iterate through array and apply the predicate on each int in the array
+    //return the time in nanos  
+    private static long testValues(int[] values, IntPredicate predicate) {
+        long start = System.nanoTime();
+        for (int i = 0; i &lt; values.length; i++) {
+            boolean unused = predicate.test(values[i]);
+        }
+        long end = System.nanoTime();
+        return (end - start);
+    }
 
-    <span class="kd">private</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">runIterations</span><span class="o">(</span><span class="kt">int</span> <span class="n">ITERS</span><span class="o">,</span> <span class="n">IntPredicate</span> <span class="n">predicate</span><span class="o">,</span> <span class="kt">int</span> <span class="n">start</span><span class="o">)</span> <span class="o">{</span>
-        <span class="k">for</span> <span class="o">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="n">start</span><span class="o">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">ITERS</span><span class="o">;</span> <span class="n">i</span><span class="o">+=</span><span class="mi">2</span><span class="o">)</span> <span class="o">{</span>
-            <span class="kt">long</span> <span class="n">time</span> <span class="o">=</span> <span class="n">testValues</span><span class="o">(</span><span class="n">values</span><span class="o">,</span> <span class="n">predicate</span><span class="o">);</span>
-            <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;#&quot;</span> <span class="o">+</span> <span class="n">i</span> <span class="o">+</span> <span class="s">&quot;, &quot;</span> <span class="o">+</span> <span class="n">time</span><span class="o">);</span>
-        <span class="o">}</span>
-    <span class="o">}</span>
+    private static void runIterations(int ITERS, IntPredicate predicate, int start) {
+        for (int i = start; i &lt; ITERS; i+=2) {
+            long time = testValues(values, predicate);
+            System.out.println(&quot;#&quot; + i + &quot;, &quot; + time);
+        }
+    }
 
-    <span class="kd">public</span> <span class="kd">static</span> <span class="kt">void</span> <span class="nf">main</span><span class="o">(</span><span class="n">String</span><span class="o">[]</span> <span class="n">args</span><span class="o">)</span> <span class="o">{</span>
+    public static void main(String[] args) {
 
-        <span class="kd">final</span> <span class="kt">int</span> <span class="n">ITERS</span> <span class="o">=</span> <span class="mi">500</span><span class="o">;</span>
-        <span class="n">runIterations</span><span class="o">(</span><span class="n">ITERS</span><span class="o">,</span> <span class="k">new</span> <span class="n">IsOdd</span><span class="o">(),</span> <span class="mi">1</span><span class="o">);</span> 
+        final int ITERS = 500;
+        runIterations(ITERS, new IsOdd(), 1); 
 
-        <span class="n">runIterations</span><span class="o">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">ITERS</span><span class="o">,</span> <span class="k">new</span> <span class="n">IsEven</span><span class="o">(),</span> <span class="n">ITERS</span><span class="o">);</span>
-    <span class="o">}</span>
-<span class="o">}</span>
-</pre></div>
+        runIterations(2 * ITERS, new IsEven(), ITERS);
+    }
+}
 
+</code></pre>
 
 <h3>Dynamic Runtime Compilation</h3>
 <h4>Profile Guided Optimising Compiler</h4>
 <p>Initially all byte-code run in interpreter mode, 
 <img alt="profile guided optimization" src="/imgs/duke-checking.gif"></p>
-<p>Once a <strong>hot method</strong> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU. </p>
+<p>Once a <em>hot method</em> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU. </p>
 <h4>JIT Optimizations</h4>
 <p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to <strong>deoptimize</strong> (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. </p>
 <p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> the at runtime there at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and execution reverts back to running bytecode through the interpreter until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>

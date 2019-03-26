@@ -6,12 +6,14 @@
         <meta name=viewport content="width=device-width, initial-scale=1">
         <meta name=”description” content=”isaiah perumalla tech blog, Alogrithms, Java, Java performance, profiling, linux, Python, Linux”>
         <link href="/theme/css/theme.css" rel="stylesheet">
-        <link href="/theme/css/code_styles.css" rel="stylesheet">
+        <link href="/theme/css/solarized-dark.css" rel="stylesheet">
         <link href="/theme/css/custom.css" rel="stylesheet">
         <link href="/theme/css/sanitize.css" rel="stylesheet">
 
         <!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=UA-134619110-1"></script>
+<script src="/theme/js/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
@@ -58,12 +60,12 @@ It can be used as a way to better understand system performance and behavior, ev
 Events, tracing, exception tracking are all a derivative of the log. </p>
 <h3>Seperate information from representation</h3>
 <p>To add some form of “Observability", programmers usually log events as shown below </p>
-<div class="codehilite"><pre><span></span>if (logger.isInfoEnabled()) {
+<pre><code>if (logger.isInfoEnabled()) {
     logger.info(&quot;received price for symbol {} for date: {} with value {}&quot;, price.symbol(), price.getDate(), price.value())
 
    }
-</pre></div>
 
+</code></pre>
 
 <p>The logging shown above is very common, the current defacto logging API are centered around formatted strings, in doing so we are conflating the information and the representation. Text based logging using formatted strings are popular, main reason for this the assumption that humans are the first level consumers of the logs, however when analysing logs we usually interested in a subset of information, generally tools like grep or custom ad hoc scripts are used to extract information of interested, however this approach doesnt scale for larger applications.
  The other issue with formatted string based logging is that it has conflated two concerns, recording information and how it is represented, in doing so the calling code has to know how to representing the information, mixing these two concerns severely affects the flexibility and using string usually has serious impact on performance.
