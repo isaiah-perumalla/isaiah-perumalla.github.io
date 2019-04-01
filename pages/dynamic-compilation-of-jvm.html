@@ -115,19 +115,37 @@ In this process it performs some minimal and elementry optimization (<em>this is
 <img alt="jvm-execution-life-cycle" src="/imgs/jvm-life-cycle.svg"></p>
 <ol>
 <li>
-<p><em>Byte Code Interpreter</em>: All code execution is first done through the byte code interpreter, once the .class files are loaded by class loader the method that is executed is stored in a reserved area of memory called the <em>Method Cache</em>, this contains verified byte code for each method. Only <em>hot methods</em> deemed worthy of compilation to navtive code are actually compiled. </p>
+<p><strong>Byte Code Interpreter</strong>- All code execution is first done through the byte code interpreter, once the .class files are loaded by class loader the method that is executed is stored in a reserved area of memory called the <em>Method Cache</em>, this contains verified byte code for each method. Only <em>hot methods</em> deemed worthy of compilation to navtive code are actually compiled. </p>
 <blockquote>
 <p>Early version of JVM execute code only in interpreted mode, you can still run an application in interpreted mode only by <code>-XX:+Int</code> jvm arg</p>
 </blockquote>
 </li>
 <li>
-<p><em>Profiling</em>: One of the main function of JVM is to determine which methods to compile at runtime. To determine the <em>hotness</em> of a method, an invocation counter is associated with each method and each time the interpreter executes a method counter is increment. Background threads in JVM observe and gather statistics on which methods and what parts of the method bytecode from the <em>Method Cache</em> are most commonly run. The information that has been collected about the execution of the app is called a <em>profile</em>. The compiler can then use this <em>profile</em> to make some of its optimizations more effective, which can result in signigicant performace benefits, this technique is often reffered to as profile-guided optimization.</p>
+<p><strong>Profiling</strong>: One of the main function of JVM is to determine which methods to compile at runtime. To determine the <em>hotness</em> of a method, an invocation counter is associated with each method and each time the interpreter executes a method counter is increment. Background threads in JVM observe and gather statistics on which methods and what parts of the method bytecode from the <em>Method Cache</em> are most commonly run. The information that has been collected about the execution of the app is called a <em>profile</em>. The compiler can then use this <em>profile</em> to make some of its optimizations more effective, which can result in signigicant performace benefits, this technique is often reffered to as profile-guided optimization.</p>
 </li>
 <li>
-<p><em>JIT compile</em>:</p>
+<p><em><em>JIT compilation (native code generation)</em>: Once a </em>hot method<em> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called </em>Code Cache*. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU.</p>
+<blockquote>
+<p>The current openJDK implementations have <em>two JIT compilers</em> </p>
+</blockquote>
+<p><em>Client compiler (C1)</em> which can produce machine code quickly however not with aggresive optimization. </p>
+<p><em>Server compiler C2</em> take a bit longer to produce machine code but can generate highgly optimized machine code. </p>
+<p>Previously C1 compiler was used for desktop applications and C2 for server applications, from JDK 8 onwards the default behaviour is to combine both the C1 and C2 compilers. Initially bytecode for a method is compiled with C1 and if the method is still identified as a hotspot and there is enough data collected by JVM to indicate a C2 compilation is worth while, the method is compiled a second time with further optimisations.
+This is usually reffered to at <strong>Tiered Compilation</strong> and is turn on by default of all JVM version 8 onwards. </p>
+<p>-XX:+/-TieredCompilation</p>
+<p>can be used to enbable disable this feature. </p>
 </li>
 <li>
-<p><em>Deoptimization</em>: One of the main advantages of a <em>Managed</em> profile guided optimizer is the ability to make <em>speculative optimzations</em>, this where the VM can make <em>educated guesses</em> and perform aggressive optimizations, however for this to work there is needs to be a for the JVM to correct its assumptions just in-case the assumptions are no longer true, deoptimzation is fall back strategy where JIT compiled code is invalidated and execution falls back to interpreter, until further data is collected before another compilation is done.</p>
+<p><strong>Deoptimization</strong>: It turns out the JVM <strong>must</strong> be able to deoptimze code (i.e discard native code for a method and run the method in the interpreter).</p>
+<blockquote>
+<p>Why the need to deoptimize code </p>
+</blockquote>
+<p>One of the main advantages of a <em>Managed</em> profile guided optimizer is the ability to make <em>speculative optimzations</em>, this where the VM can make <em>educated guesses</em> and perform aggressive optimizations, however for this to work there is needs to be a way for the JVM to <em>correct its assumptions</em> just in-case the assumptions are no longer true, deoptimzation is fall back strategy where JIT compiled code is invalidated and execution falls back to interpreter, until further data is collected before another compilation is done. </p>
+<blockquote>
+<p>Inlining virtual method dispatches is not generally possible in static AOT compilers</p>
+</blockquote>
+<p>All methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned it into static method call (fixed address call, indirection of vtable lookup can be eliminated) or even inlined at the call site <em>if</em> the at runtime there there is enough data to show that at the call site it mosly likely only a single type in a heirachy is executed.</p>
+<p>However if at a later point a new type from the class heirachy is loaded or present at the call site, the JIT will have to deoptimize, that is it will back out the optimization by invalidating the machine code from <em>Code Cache</em> and execution reverts back to running bytecode through the interpreter which will execute full virtual dispatch until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
 </li>
 </ol>
 <h3>JIT Compiler(s) in Action</h3>
@@ -140,16 +158,16 @@ import java.util.function.IntPredicate;
 
 public class Main {
 
-    private static final int[] values;
+    private static final int[] randomValues;
 
-    public static final int MAX_SIZE = 1000_000;
+    public static final int MAX_SIZE = 10_000;
 
     static {
 
         Random random = new Random();
-        values = new int[MAX_SIZE];
-        for (int i = 0; i &lt; values.length; i++) {
-            values[i] = random.nextInt();
+        randomValues = new int[MAX_SIZE];
+        for (int i = 0; i &lt; randomValues.length; i++) {
+            randomValues[i] = random.nextInt();
         }
 
     }
@@ -168,30 +186,30 @@ public class Main {
         }
     }
 
-    // iterate through array and apply the predicate on each int in the array
-    //return the time in nanos  
+    public static void main(String[] args) {
+
+        final int ITERATIONS = 100;
+        runIterations(ITERATIONS, new IsOdd(), 0);
+
+        runIterations(ITERATIONS, new IsEven(), 100);
+
+    }
+
+    private static void runIterations(int count, IntPredicate predicate, int start) {
+        for (int i = start; i &lt; (start + count); i++) {
+            long time = testValues(randomValues, predicate);
+            System.out.println(&quot;#&quot; + i + &quot;, &quot; + time);
+        }
+    }
+
     private static long testValues(int[] values, IntPredicate predicate) {
+
         long start = System.nanoTime();
         for (int i = 0; i &lt; values.length; i++) {
             boolean unused = predicate.test(values[i]);
         }
         long end = System.nanoTime();
         return (end - start);
-    }
-
-    private static void runIterations(int ITERS, IntPredicate predicate, int start) {
-        for (int i = start; i &lt; ITERS; i+=2) {
-            long time = testValues(values, predicate);
-            System.out.println(&quot;#&quot; + i + &quot;, &quot; + time);
-        }
-    }
-
-    public static void main(String[] args) {
-
-        final int ITERS = 500;
-        runIterations(ITERS, new IsOdd(), 1); 
-
-        runIterations(2 * ITERS, new IsEven(), ITERS);
     }
 }
 
@@ -205,20 +223,38 @@ OpenJDK 64-Bit Server VM 18.9 (build 11.0.2+9, mixed mode)
 
 </code></pre>
 
+<pre><code>#0, 769734
+#1, 330086
+#2, 326234
+#3, 327919
+#4, 324036
+#5, 328149
+#6, 343698
+#7, 339803
+#8, 227353
+#9, 122103
+#10, 80405
+#11, 88627
+#12, 110416
+#13, 117678
+#14, 127212
+#15, 136834
+#16, 132387
+#17, 131895
+#18, 130024
+
+</code></pre>
+
 <p>we execute the program and plot the execution times to help us visualize the performance.</p>
 <p><img alt="run-time-plot" src="/imgs/time.svg"></p>
 <h3>Dynamic Runtime Compilation</h3>
 <h4>Profile Guided Optimising Compiler</h4>
 <p>Initially all byte-code run in interpreter mode, 
 <img alt="profile guided optimization" src="/imgs/duke-checking.gif"></p>
-<p>Once a <em>hot method</em> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called <strong>Code Cache</strong>. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU. </p>
 <h4>JIT Optimizations</h4>
-<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform <strong>Speculative optimzations</strong> - The JVM is continously profiling the executed code, the JIT can use this data to take a 'gamble' and make aggresive optimizations for the common based on runtime information. However this kind of optimization comes with a cost, for speculative optimization to work the JVM needs to also be able to <strong>deoptimize</strong> (undo the optimization) if for example the any optimzations based on assumptions made are no longer true. </p>
-<p>For example all methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned into static method call (fixed address call) or even inlined at the call site <strong>if</strong> the at runtime there at the call site only a single type in a heirachy is executed. However if at a later point a new type from the class heirachy is loaded, the JIT will have to deoptimize, that is machine code is removed from the <strong>Code Cache</strong> and execution reverts back to running bytecode through the interpreter until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
-<p>-- picture of non entrant</p>
+<p>Most compilers can perform static optimizations, however true power of the JVM is the ability to perform 
+-- picture of non entrant</p>
 <h5>Tiered Compilation</h5>
-<p>The current openJDK implementations have two JIT compilers, the <strong>client compiler</strong> (C1) which can produce machine code quickly however not with aggresive optimization. The other compiler known as <strong>server compiler</strong> or C2 take a bit longer to produce machine code but can generate highgly optimized machine code. Previously C1 compiler was used for desktop applications and C2 for server applications, from JDK 8 onwards the default behaviour is to combine both the C1 and C2 compilers. Initially bytecode for a method is compiled with C1 and if the method is still identified as a hotspot and there is enough data collected by JVM to indicate a C2 compilation is worth while, the method is compiled a second time with further optimisations.
-This is usually reffered to at <strong>Tiered Compilation</strong> and is turn on by default of all JVM version 8 onwards. <code>-XX:+/-TieredCompilation</code> can be used to enbable disable this feature. </p>
 <h4>Pratical guidelines</h4>
 <ul>
 <li>once a hot method has been identified use <code>-XX:+PrintCompilation</code> jvm flag to verify the method was JIT compiled</li>
