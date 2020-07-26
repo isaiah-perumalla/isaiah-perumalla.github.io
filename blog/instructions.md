@@ -5,6 +5,12 @@
 ```
 pygmentize -S monokai -f html -a .codehilite > code.css
 ```
+
+## setup
+* install python 
+* create virtenv called blog_env **(Makefile assumes this)**
+* pip install -r requirements
+* activate virt env
 ## build
 
 * cd blog
