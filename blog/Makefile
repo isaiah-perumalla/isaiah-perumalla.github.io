@@ -1,7 +1,7 @@
 PY?=python3
 BLOG_HOME=..
-PELICAN=$(BLOG_HOME)/__virtenv/bin/pelican
-PELICAN_THEMES=$(BLOG_HOME)/__virtenv/bin/pelican-themes
+PELICAN=$(BLOG_HOME)/blog_env/bin/pelican
+PELICAN_THEMES=$(BLOG_HOME)/blog_env/bin/pelican-themes
 PELICANOPTS=
 
 BASEDIR=$(CURDIR)
