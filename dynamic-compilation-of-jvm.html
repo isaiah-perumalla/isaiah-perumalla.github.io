@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+          <title>Isaiah Perumalla</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name=viewport content="width=device-width, initial-scale=1">
+        <meta name=”description” content=”isaiah perumalla tech blog, Alogrithms, Java, Java performance, profiling, linux, Python, Linux”>
+        <link href="/theme/css/theme.css" rel="stylesheet">
+        <link href="/theme/css/atom-one-dark.css" rel="stylesheet">
+        <link href="/theme/css/custom.css" rel="stylesheet">
+        <link href="/theme/css/sanitize.css" rel="stylesheet">
+
+
+
+
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-134619110-1"></script>
+<script src="/theme/js/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-134619110-1');
+</script>
+
+</head>
+
+<body id="index" class="home">
+<header id="page-header">
+<div id="site-title" class="col span_6">
+    </div>
+        <nav id="social">
+            <ul>
+            <li><a href="/index.html">Home</a></li>
+            <li><a href="/pages/about.html">About</a></li>
+            
+            
+        </ul>
+        </nav><!-- /#menu -->
+
+    </header> 
+<section id="content" class="body">
+  <header>
+    <h1 class="entry-title">Dynamic Compilation of JVM</h1>
+ 
+  <abbr class="published" title="2019-02-14T10:20:00+00:00">
+      Thu 14 February 2019
+    </abbr>
+  </header>
+  <div class="entry-content">
+    <p>One of the most crucial parts of the JVM is the Just-In-Time (JIT) compiler; understanding how JVM dynamic compilation and optimization work is key to getting a sense of how to measure and improve performace of JVM applications by writing <em>JIT friendly</em> applications. Having a mental model of how code execution can help us make informed decision. 
+The other key point Micro benchmarking is hard to get right in general, but it is even harder to get right on JVM due the adpative nature of the compiler.</p>
+<ol>
+<li><a href="#jvm-exe">JVM code execution in a nutshell</a></li>
+<li><a href="">Perils of microbenchmarking</a></li>
+<li><a href="#measure-dont-guess">case for measuring JVM applications</a></li>
+</ol>
+<h2><a name="jvm-exe"> JVM code execution in a nutshell </a></h2>
+<p>This should provide motivation for why it is even more important to measure and identify hotspots in your application code .
+The runtime execution of Java code is far more complex than native C/C++ applications, for example gcc comipler compiles and optimizes C code Ahead of time (AOT), which means we can use a disassemble on binaries to see exactly the machine code which will run on the hardware.
+JVM on the other hand does not do this as it several key reasons</p>
+<ul>
+<li>One the main selling point of Java is platform independence, this allivates the need for programmers to recompile application for different CPU architecutres (x86, ARM, Sparc) or Operating systems (Linux/Windows), instead moves the portability problem to JVM). JVM application are compiled into platform independent byte-code (store in <em>.class files</em>)</li>
+<li>JVM allows runtime modifications to code, which mean it cannot rely just on static compilation</li>
+</ul>
+<p>Given the contraints above JVM makes a completely different set of tradeoffs, to enable a very <em>adaptive system</em>. Code compilation and optimization are performed at runtime, <em>continously</em> and highly dependend on work-load of the applicaion. 
+So Unlike a statically compiled language like C/C++, We <em>dont know</em> the exact code executed on the cpu until runtime. A high level overview of how JVM executes code is  as outlined below</p>
+<p>Compiler <em>javac</em>  simply transform Java source code into <em>Java Bytecode</em>, but this isn't machine code which a cpu can execute, it is simply a machine independent intermediate representation.
+In this process it performs some minimal and elementry optimization (<em>this is by design</em> as we shall see most powerful optimization are done by the <em>JIT</em>)</p>
+<pre><code>public class StringConcat {
+
+    public static void main(String[] args) {
+        String str = &quot;is this&quot;;
+        str += &quot;inefficient ?&quot;;
+
+        System.out.print(str);
+
+    }
+
+}
+</code></pre>
+
+<p>Using the hotspot java-8 <em>javac</em> compiler, the code above is transformed the following byte-code
+<code>javap -c StringConcat.class</code></p>
+<pre><code>public class net.isaiahp.StringConcat {
+  public net.isaiahp.StringConcat();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object.&quot;&lt;init&gt;&quot;:()V
+       4: return
+
+  public static void main(java.lang.String[]);
+    Code:
+       0: ldc           #2                  // String is this
+       2: astore_1
+       3: new           #3                  // class java/lang/StringBuilder
+       6: dup
+       7: invokespecial #4                  // Method java/lang/StringBuilder.&quot;&lt;init&gt;&quot;:()V
+      10: aload_1
+      11: invokevirtual #5                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      14: ldc           #6                  // String inefficient ?
+      16: invokevirtual #5                  // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      19: invokevirtual #7                  // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+      22: astore_1
+      23: getstatic     #8                  // Field java/lang/System.out:Ljava/io/PrintStream;
+      26: aload_1
+      27: invokevirtual #9                  // Method java/io/PrintStream.print:(Ljava/lang/String;)V
+      30: return
+}
+
+</code></pre>
+
+<p>Notice @ 7: of generated byte-code a <em>StringBuilder</em> is initialized</p>
+<p>However the byte-code produce  by javac cannot be executed on a real cpu, Its the JVM responsibilty to turn byte code into native code for the cpu to execute. This is can be done in two ways
+    - JVM can interpret and emulate each byte code instruction, this approach is simple to implement but suffer from slower execution as native code can be orders of magnitude faster 
+    - The other option is JVM can compile each method to native code for the particulat platform and then run the machine code directly on the cpu, the trade off here is code generation at rutime is can be expensive and can add too much overhead especially for cold method. (ie if a method is only executed once, then any benefits in execution speed is outweighed by time to compile)</p>
+<blockquote>
+<p>Byte-Code cannot be run on a physical CPU so how does the <em>HotSpot JVM</em> actually executes code ?</p>
+</blockquote>
+<p>As we shall see <em>most</em> JVMs use a combination of the of both the above approaches. </p>
+<p>The diagram below illustrates the code-execution lifecycle on modern JVMs.
+<img alt="jvm-execution-life-cycle" src="/imgs/jvm-life-cycle.svg"></p>
+<ol>
+<li>
+<p><strong>Byte Code Interpreter</strong>- All code execution is first done through the byte code interpreter, once the .class files are loaded by class loader the method that is executed is stored in a reserved area of memory called the <em>Method Cache</em>, this contains verified byte code for each method. Only <em>hot methods</em> deemed worthy of compilation to navtive code are actually compiled. </p>
+<blockquote>
+<p>Early version of JVM execute code only in interpreted mode, you can still run an application in interpreted mode only by <code>-XX:+Int</code> jvm arg</p>
+</blockquote>
+</li>
+<li>
+<p><strong>Profiling</strong>: One of the main function of JVM is to determine which methods to compile at runtime. To determine the <em>hotness</em> of a method, an invocation counter is associated with each method and each time the interpreter executes a method counter is increment. Background threads in JVM observe and gather statistics on which methods and what parts of the method bytecode from the <em>Method Cache</em> are most commonly run. The information that has been collected about the execution of the app is called a <em>profile</em>. The compiler can then use this <em>profile</em> to make some of its optimizations more effective, which can result in signigicant performace benefits, this technique is often reffered to as profile-guided optimization.</p>
+</li>
+<li>
+<p><em><em>JIT compilation (native code generation)</em>: Once a </em>hot method<em> has been indetified by the optimizer, the method is compiled to highly optimized machine code. This machine code, is stored in a region of memory called </em>Code Cache*. Once machine code for the method is in the code-cache the JVM patches the method dispatch table to point to the machine-code, so subsequent calls to the method will execute the machine code directly on the CPU.</p>
+<blockquote>
+<p>The current openJDK implementations have <em>two JIT compilers</em> </p>
+</blockquote>
+<p><em>Client compiler (C1)</em> which can produce machine code quickly however not with aggresive optimization. </p>
+<p><em>Server compiler C2</em> take a bit longer to produce machine code but can generate highgly optimized machine code. </p>
+<p>Previously C1 compiler was used for desktop applications and C2 for server applications, from JDK 8 onwards the default behaviour is to combine both the C1 and C2 compilers. Initially bytecode for a method is compiled with C1 and if the method is still identified as a hotspot and there is enough data collected by JVM to indicate a C2 compilation is worth while, the method is compiled a second time with further optimisations.
+This is usually reffered to at <strong>Tiered Compilation</strong> and is turn on by default of all JVM version 8 onwards. </p>
+<p>-XX:+/-TieredCompilation</p>
+<p>can be used to enbable disable this feature. </p>
+</li>
+<li>
+<p><strong>Deoptimization</strong>: It turns out the JVM <strong>must</strong> be able to deoptimze code (i.e discard native code for a method and run the method in the interpreter).</p>
+<blockquote>
+<p>Why the need to deoptimize code </p>
+</blockquote>
+<p>One of the main advantages of a <em>Managed</em> profile guided optimizer is the ability to make <em>speculative optimzations</em>, this where the VM can make <em>educated guesses</em> and perform aggressive optimizations, however for this to work there is needs to be a way for the JVM to <em>correct its assumptions</em> just in-case the assumptions are no longer true, deoptimzation is fall back strategy where JIT compiled code is invalidated and execution falls back to interpreter, until further data is collected before another compilation is done. </p>
+<blockquote>
+<p>Inlining virtual method dispatches is not generally possible in static AOT compilers</p>
+</blockquote>
+<p>All methods are virtual by default in Java, but JIT compiler can remove the overhead of virtual method dispatches and turned it into static method call (fixed address call, indirection of vtable lookup can be eliminated) or even inlined at the call site <em>if</em> the at runtime there there is enough data to show that at the call site it mosly likely only a single type in a heirachy is executed.</p>
+<p>However if at a later point a new type from the class heirachy is loaded or present at the call site, the JIT will have to deoptimize, that is it will back out the optimization by invalidating the machine code from <em>Code Cache</em> and execution reverts back to running bytecode through the interpreter which will execute full virtual dispatch until next JIT compilation, this means generated machine code for a particular method can be invalidated by changes to the running program must be thrown away and potentially regenerated.</p>
+</li>
+</ol>
+<h3>JIT Compiler(s) in Action</h3>
+<p>To demonstrate the fact that java does not just run is one way and see the JIT compiler in action. We execute a simple program shown below; in this program we initialise an int array of ten thousand random integers, we provide <em>two</em> implemenations of <code>java.util.function.IntPredicate</code> <code>class IsEven</code> and <code>class IsOdd</code> as the name suggest one implemention tests to see if an int is odd and other other tests to see if the int is even.
+We iterate through the array and execute the predicate and measure the execution time to test all items of the array, we repeate this a 100 times observe how the execution times vary and how the perfomance changes as the application continues to run. We do this process once using the <code>IsOdd</code> predicate and then using <code>IsEven</code> predicate.</p>
+<pre><code>package net.isaiahp;
+
+import java.util.Random;
+import java.util.function.IntPredicate;
+
+public class Main {
+
+    private static final int[] randomValues;
+
+    public static final int MAX_SIZE = 10_000;
+
+    static {
+
+        Random random = new Random();
+        randomValues = new int[MAX_SIZE];
+        for (int i = 0; i &lt; randomValues.length; i++) {
+            randomValues[i] = random.nextInt();
+        }
+
+    }
+
+    private static class IsEven implements IntPredicate {
+        @Override
+        public boolean test(int value) {
+            return (value &amp; 0x1) == 0;
+        }
+    }
+
+    private static class IsOdd implements IntPredicate  {
+        @Override
+        public boolean test(int value) {
+            return (value &amp; 0x1) == 1;
+        }
+    }
+
+    public static void main(String[] args) {
+
+        final int ITERATIONS = 100;
+        runIterations(ITERATIONS, new IsOdd(), 0);
+
+        runIterations(ITERATIONS, new IsEven(), 100);
+
+    }
+
+    private static void runIterations(int count, IntPredicate predicate, int start) {
+        for (int i = start; i &lt; (start + count); i++) {
+            long time = testValues(randomValues, predicate);
+            System.out.println(&quot;#&quot; + i + &quot;, &quot; + time);
+        }
+    }
+
+    private static long testValues(int[] values, IntPredicate predicate) {
+
+        long start = System.nanoTime();
+        for (int i = 0; i &lt; values.length; i++) {
+            boolean unused = predicate.test(values[i]);
+        }
+        long end = System.nanoTime();
+        return (end - start);
+    }
+}
+
+</code></pre>
+
+<p>To run the above program above we use openjdk 11</p>
+<pre><code>java -version
+openjdk version &quot;11.0.2&quot; 2019-01-15
+OpenJDK Runtime Environment 18.9 (build 11.0.2+9)
+OpenJDK 64-Bit Server VM 18.9 (build 11.0.2+9, mixed mode)
+
+</code></pre>
+
+<pre><code>#0, 769734
+#1, 330086
+#2, 326234
+#3, 327919
+#4, 324036
+#5, 328149
+#6, 343698
+#7, 339803
+#8, 227353
+#9, 122103
+#10, 80405
+#11, 88627
+#12, 110416
+#13, 117678
+#14, 127212
+#15, 136834
+#16, 132387
+#17, 131895
+#18, 130024
+
+</code></pre>
+
+<blockquote>
+<p>Generally the server compiler makes aggressive inlining decisions of non-final methods. As long as the inlined method is never overridden the code is correct. When a subclass is loaded and the method overridden, the compiled code is broken for all future calls to it. The code gets declared "not entrant" (no future callers to the broken code), but sometimes existing callers can keep using the code. In the case of inlining, that's not good enough; existing callers' stack frames are "deoptimized" when they return to the code from nested calls (or just if they are running in the code). When no more stack frames hold PC's into the broken code it's declared a "zombie" - ready for removal once the GC gets around to it</p>
+</blockquote>
+<p>we execute the program and plot the execution times to help us visualize the performance.</p>
+<p><img alt="run-time-plot" src="/imgs/time.svg"></p>
+<p>The graph shows the different stages of code execution.
+<em> we see the run times for drop significantly once the code is compiled to native code by </em>C2 compiler<em>.
+</em> we can also see a spike in runtime as code is deoptimized once a different implementation of a class is loaded and run </p>
+<h4>Pratical guidelines</h4>
+<ul>
+<li>once a hot method has been identified use <code>-XX:+PrintCompilation</code> jvm flag to verify the method was JIT compiled</li>
+<li>Refactor code have smaller methods (large methods wont be JIT compiled), use JarScan to identify large method in third party jars</li>
+<li>write clean idiomatic java code</li>
+<li>Avoid exceptions for control flow, use only in exceptional circumstances</li>
+<li>Allow JVM to warm up after restarts. </li>
+</ul>
+<h2><a name="measure-dont-guess"> Measure dont guess </a></h2>
+<p>As we can see the number of transformations our code goes through during runtime, it does really obsure the code that is written and the actual code that is executed on the machine.
+No what it does .
+JVM is does a good job detecting patterns in a very large software at runtime and applies optimization dynamically, this means the code that will write <strong>will</strong> very different to the <strong>machine code</strong> that is run on the cpu, meaning any <em>micro</em> optimizations we perform as a developer may have no affect or even a negative effect at all on the runtime performance. For example optimizing a method which is never going to be JIT compiled is wasted effort, identifying <strong>hot code</strong> should always be the first step. </p>
+<blockquote>
+<p><strong>Does that mean we should never care about performance ? </strong></p>
+</blockquote>
+<p>No not at all but what it means is we should foucs on our efforts on doing <strong>micro optimization</strong> we should focus writing <strong>JIT friendly</strong> code so the JVM can do it optimization better. 
+The other area to focus on is areas where an JVM can't help, these are optimization at the domain level for example<br>
+<em> replace a linear search with an efficient log n algorithm
+</em> how our application make use of OS resources such as threads
+* implement caching if needed</p>
+<p>To identify areas of bottlenecks it is important to collect data and measure the performance of a running application. Profilers are one tool every developer should use before attempting to make any performance improvements.
+Following quote from Knuth sums it up nicely</p>
+<blockquote>
+<p><strong>"Programmers waste enormous amounts of time thinking about, or worrying about, the speed of noncritical parts of their programs, and these attempts at efficiency actually have a strong negative impact when debugging and maintenance are considered. We should forget about small efficiencies, say about 97% of the time: premature optimization is the root of all evil.Yet we should not pass up our opportunities in that critical 3%. A good programmer will not be lulled into complacency by such reasoning, he will be wise to look carefully at the critical code; but only after that code has been identified. It is often a mistake to make a priori judgments about what parts of a program are really critical, since the universal experience of programmers who have been using measurement tools has been that their intuitive guesses fail."</strong></p>
+</blockquote>
+<p><strong>--Donald Knuth</strong></p>
+  </div><!-- /.entry-content -->
+</section>
+<div id="disqus_thread"></div>
+<script>
+
+var disqus_config = function () {
+this.page.url = dynamic-compilation-of-jvm.html;  // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = dynamic-compilation-of-jvm.html; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+s.src = 'https://isaiahp-co-uk.disqus.com/embed.js';
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+
+        
+</body>
+</html>

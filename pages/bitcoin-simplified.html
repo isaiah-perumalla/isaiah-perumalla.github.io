@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>Bitcoin simplified</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name=viewport content="width=device-width, initial-scale=1">
+        <meta name=”description” content=”isaiah perumalla tech blog, Alogrithms, Java, Java performance, profiling, linux, Python, Linux”>
+        <link href="/theme/css/theme.css" rel="stylesheet">
+        <link href="/theme/css/atom-one-dark.css" rel="stylesheet">
+        <link href="/theme/css/custom.css" rel="stylesheet">
+        <link href="/theme/css/sanitize.css" rel="stylesheet">
+
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-134619110-1"></script>
+<script src="/theme/js/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-134619110-1');
+</script>
+
+</head>
+
+<body id="index" class="home">
+<header id="page-header">
+<div id="site-title" class="col span_6">
+    </div>
+        <nav id="social">
+            <ul>
+            <li><a href="/index.html">Home</a></li>
+            <li><a href="/pages/about.html">About</a></li>
+            
+            
+        </ul>
+        </nav><!-- /#menu -->
+
+    </header> 
+    <h1>Bitcoin simplified</h1>
+    
+
+    <p>Bitcoin been around for over 10 years now, and more people are interested in it. This is a very simplified introduction to  understanding what bitcoin is. 
+To understan bitcoin, let first look at traditional cash-based system.</p>
+<ul>
+<li>
+<p>in general cash is backed by a government and issued by a central bank.</p>
+</li>
+<li>
+<p>To buy something you would exchange a precise amount of physical cash or the goods or services required</p>
+</li>
+<li>
+<p>Cash allows us to use numbers to talk about the value of something</p>
+</li>
+<li>
+<p>unlike credit or debit cards where a bank/third party can track your spending , when you pay in cash* a bank does not come in to the picture, in this regard cash offers better anonymity. cash allows payments to be sent directly from one party to another without going through a
+financial institution. for example you can give your friend £20 withouth any central authority or third party getting invloved.</p>
+</li>
+</ul>
+<p><img alt="20 pound note" src="/imgs/20quid.jpg"></p>
+<p>The image above is 20 pound note issued by the bank of england. 
+- it has a serial number
+- it has additional anti-forgery stuff to esure it not easily replicated.</p>
+<p>if we were to digital cash , how would we do this electronically ?</p>
+<h2>Attempt-1</h2>
+<p>one way could be create a piece of data representing some a unit of virtual cash, with a digital signature.
+In physical world once you hand once you spent the cash , it gone you cannot respent, however in the digital world, it very simple to make copies of digital cash and keep spending the same note over and over again.</p>
+<h2>Attempt-2</h2>
+<p>To avoid the scenario above each time we receive cash from someone we could record it as spend in some database the serial number of spent virtual cash,  This way if we received the same virtual note again we can look up this central database to check if the serial number of virtual cash has been spent already. 
+However if we wanted to spend the cash we received we would not be able to sped it as In this system cash can only be spent once. To over come this problem we could take the spent cash to a central authority and get them to issue us new cash with new serial numbers (this is easy to do in the digital).</p>
+<p>The above scheme could work but there are two glaring problems.</p>
+<ul>
+<li>A trust central authority and cenral database is required.</li>
+<li>This is no longer the same as physical cash it is not annoymous anymore each time we spent cash this is recorded in a database. Even in the simple case where you hand £20 to a friend in not longer annoymous in this digital system above.</li>
+</ul>
+<p>Is this possible to create a digital cash system 
+- where there is no need for a central/trusted authority</p>
+<ul>
+<li>
+<p>digtal cash transactions are annoymous</p>
+</li>
+<li>
+<p>have some way to regulate the create creation of new digtial cash without a central trusted authority.</p>
+</li>
+</ul>
+<p>Bitcoin is digtial cash which solves the problems above without requiring a central trusted authority.</p>
+
+
+        
+</body>
+</html>
